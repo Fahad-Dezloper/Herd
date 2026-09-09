@@ -73,6 +73,12 @@ function addressToBase58(address: string): string {
 export function explainWalletError(e: unknown): string {
   const raw = e instanceof Error ? e.message : String(e);
 
+  // Seed Vault validates against its own global network setting, not the chain
+  // the app authorised. There is nothing the app can do about it, so say what
+  // to change rather than repeating the wallet's wording.
+  if (/network mismatch|current network/i.test(raw)) {
+    return "Your wallet is set to a different network. Switch Seed Vault to devnet and try again.";
+  }
   if (/cancel/i.test(raw)) {
     return "The wallet approval was dismissed. Tap Approve and confirm with your fingerprint.";
   }

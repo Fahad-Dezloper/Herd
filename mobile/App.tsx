@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 
 import {
   BASE_RPC,
@@ -27,6 +27,7 @@ import {
 import { Herd, Phase, Rule, type RoomState } from "./src/lib/herd";
 import { connectWallet, explainWalletError, signTransaction, type Wallet } from "./src/lib/mwa";
 import { sessionFor } from "./src/lib/session";
+import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
 import { questionFor } from "./src/questions";
 import { answered } from "./src/ui/Seats";
 import { Reveal } from "./src/ui/Reveal";
@@ -59,6 +60,7 @@ export default function App() {
   const [endpoint, setEndpoint] = useState<{ url: string; token?: string }>({ url: BASE_RPC });
   const [pot, setPot] = useState(0);
 
+  const [bots, setBots] = useState<Bot[]>([]);
   const [joinCode, setJoinCode] = useState("");
   const [answer, setAnswer] = useState("");
   const [sealedWord, setSealedWord] = useState<string | null>(null);
@@ -66,6 +68,8 @@ export default function App() {
   // The round the UI has already shown a reveal for, so it fires once.
   const shown = useRef(0);
   const closing = useRef(false);
+  // The round the bots have already been sent into, so they answer once.
+  const botted = useRef(0);
 
   /* ------------------------------------------------------------- polling */
 
@@ -133,6 +137,44 @@ export default function App() {
     })();
   }, [room, session, endpoint]);
 
+  // Bots answer on their own, once per round, spread across the window so the
+  // room fills up the way it would with people in it.
+  useEffect(() => {
+    if (!room || !ref || room.phase !== Phase.Playing || room.awaitingRule) return;
+    if (bots.length === 0 || botted.current === room.round) return;
+    botted.current = room.round;
+
+    const question = questionFor(room.round);
+    const live = bots.filter((bot) =>
+      room.seats.some(
+        (seat) => seat.alive && seat.session.toBase58() === bot.keypair.publicKey.toBase58(),
+      ),
+    );
+
+    live.forEach((bot) => {
+      setTimeout(async () => {
+        try {
+          await sendLocal(
+            endpoint.url,
+            [bot.keypair],
+            [
+              herd.submitAnswer(
+                ref.host,
+                ref.roomId,
+                bot.keypair.publicKey,
+                botAnswer(question),
+              ),
+            ],
+            endpoint.token,
+          );
+        } catch {
+          // A bot that misses the window is culled for it, exactly like a person
+          // who did not answer. Nothing to recover.
+        }
+      }, botDelay(room.roundSeconds));
+    });
+  }, [room, bots, endpoint, ref]);
+
   /* ------------------------------------------------------------- actions */
 
   const run = async (label: string, fn: () => Promise<void>) => {
@@ -196,6 +238,60 @@ export default function App() {
 
       setRef({ host, roomId });
       setScreen("waiting");
+    });
+
+  /**
+   * Seat some bots.
+   *
+   * One wallet signature funds them all; after that each one takes its own seat
+   * and pays its own stake, signing for itself. The program has no idea they are
+   * bots, which is the only way this proves anything.
+   */
+  const onAddBots = (count: number) =>
+    run(`Seating ${count} players`, async () => {
+      const { host, roomId } = ref!;
+      const key = herd.room(host, roomId);
+      const crew = await botsFor(key.toBase58(), count);
+
+      // Stake plus enough for their own fees for the rest of the game.
+      const topUp = Number(STAKE) + 8_000_000;
+      const fund = new Transaction({
+        feePayer: new PublicKey(wallet!.address),
+        recentBlockhash: await latestBlockhash(BASE_RPC),
+      });
+      for (const bot of crew) {
+        const has = await lamportsOf(BASE_RPC, bot.keypair.publicKey);
+        if (has < topUp) {
+          fund.add(
+            SystemProgram.transfer({
+              fromPubkey: new PublicKey(wallet!.address),
+              toPubkey: bot.keypair.publicKey,
+              lamports: topUp - has,
+            }),
+          );
+        }
+      }
+      if (fund.instructions.length > 0) {
+        await submit(BASE_RPC, await signTransaction(wallet!.authToken, fund, setWallet));
+        await sleep(3000);
+      }
+
+      for (const bot of crew) {
+        const taken = room?.seats.some(
+          (seat) => seat.wallet.toBase58() === bot.keypair.publicKey.toBase58(),
+        );
+        if (taken) continue;
+        // The bot is its own session key: it only ever answers.
+        await sendLocal(
+          BASE_RPC,
+          [bot.keypair],
+          [herd.joinRoom(host, roomId, bot.keypair.publicKey, bot.keypair.publicKey)],
+        );
+        await sleep(600);
+      }
+
+      setBots(crew);
+      await refresh();
     });
 
   /** Lock, delegate, seal. Three steps, because each has to land before the next. */
@@ -343,6 +439,8 @@ export default function App() {
             pot={pot}
             isHost={wallet?.address === ref.host.toBase58()}
             busy={!!busy}
+            botCount={bots.length}
+            onAddBots={onAddBots}
             onStart={onStart}
           />
         )}

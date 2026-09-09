@@ -13,6 +13,8 @@ export function Waiting({
   pot,
   isHost,
   busy,
+  botCount,
+  onAddBots,
   onStart,
 }: {
   room: RoomState;
@@ -20,6 +22,8 @@ export function Waiting({
   pot: number;
   isHost: boolean;
   busy: boolean;
+  botCount: number;
+  onAddBots(count: number): void;
   onStart(): void;
 }) {
   const enough = room.seats.length >= 3;
@@ -42,6 +46,15 @@ export function Waiting({
 
       {isHost ? (
         <View style={{ marginTop: 18, gap: 10 }}>
+          {!enough && botCount === 0 && (
+            <>
+              <Button ghost label="Seat five bots" onPress={() => onAddBots(5)} disabled={busy} />
+              <Text style={s.note}>
+                Real seats with real stakes, signing for themselves — the program cannot tell them
+                from anyone else. They see no more than you do: the answers are sealed to them too.
+              </Text>
+            </>
+          )}
           <Button label="Start the game" onPress={onStart} disabled={busy || !enough} />
           {!enough && (
             <Text style={s.note}>

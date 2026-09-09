@@ -15,7 +15,7 @@ import { Text, View } from "react-native";
 
 import { Rule, type RoomState } from "../lib/herd";
 import { s, shortKey, tint } from "./styles";
-import { Button } from "../../App";
+import { Button } from "./Button";
 
 interface Group {
   word: string;

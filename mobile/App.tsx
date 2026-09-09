@@ -28,6 +28,7 @@ import { Ending, Herd, Phase, Rule, type RoomState } from "./src/lib/herd";
 import { explainChainError } from "./src/lib/errors";
 import { connectWallet, explainWalletError, signTransaction, type Wallet } from "./src/lib/mwa";
 import { sessionFor } from "./src/lib/session";
+import { secureStore } from "./src/lib/secure";
 import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
 import { EndingPick, EndingTally } from "./src/ui/EndingPick";
 import { Finished } from "./src/ui/Finished";
@@ -36,7 +37,8 @@ import { Seats, answered } from "./src/ui/Seats";
 import { Reveal } from "./src/ui/Reveal";
 import { Round } from "./src/ui/Round";
 import { Waiting } from "./src/ui/Waiting";
-import { s } from "./src/ui/styles";
+import { Button } from "./src/ui/Button";
+import { s, shortKey } from "./src/ui/styles";
 import idl from "./src/idl.json";
 
 const herd = new Herd(idl);
@@ -88,9 +90,21 @@ interface RoomRef {
   roomId: bigint;
 }
 
+/**
+ * Where the wallet authorisation is kept between launches.
+ *
+ * It is an MWA auth token, not a key - the key never leaves Seed Vault. What it
+ * buys is the right to ask for a signature without a fresh approval screen,
+ * which is the difference between opening the app and playing, and opening the
+ * app and doing paperwork.
+ */
+const WALLET_KEY = "herd.wallet";
+
 export default function App() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [screen, setScreen] = useState<Screen>("connect");
+  /** True until the stored wallet has been looked for. */
+  const [restoring, setRestoring] = useState(true);
   // The tiebreak is a property of one room, not a setting you carry around, so
   // it is asked once you are looking at the room it applies to.
   const [vote, setVote] = useState<Ending>(Ending.Split);
@@ -118,6 +132,39 @@ export default function App() {
   const botted = useRef(0);
 
   /* ------------------------------------------------------------- polling */
+
+  /**
+   * Hold on to a wallet authorisation.
+   *
+   * Called both on a fresh connect and whenever MWA has to renew a token that
+   * went stale - the wallet drops them when its network changes - so the
+   * renewal is not paid for twice.
+   */
+  const keepWallet = useCallback((next: Wallet) => {
+    setWallet(next);
+    secureStore.set(WALLET_KEY, JSON.stringify(next)).catch(() => {});
+  }, []);
+
+  // Pick up where the last session left off. A connect screen on every launch
+  // is asking the same question that was already answered.
+  useEffect(() => {
+    (async () => {
+      const raw = await secureStore.get(WALLET_KEY);
+      if (raw) {
+        try {
+          const saved = JSON.parse(raw) as Wallet;
+          if (saved?.address && saved?.authToken) {
+            setWallet(saved);
+            setScreen("lobby");
+          }
+        } catch {
+          // Corrupt or from an older shape. Not worth recovering; ask again.
+          await secureStore.del(WALLET_KEY);
+        }
+      }
+      setRestoring(false);
+    })();
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!ref) return;
@@ -275,13 +322,27 @@ export default function App() {
       recentBlockhash: await latestBlockhash(BASE_RPC),
     });
     instructions.forEach((i) => tx.add(i));
-    const signed = await signTransaction(wallet.authToken, tx, setWallet);
+    const signed = await signTransaction(wallet.authToken, tx, keepWallet);
     return submit(BASE_RPC, signed);
+  };
+
+  /**
+   * Forget the wallet.
+   *
+   * The counterpart to staying signed in: without it, a phone that remembers
+   * you is a phone you cannot change your mind about. The MWA token is dropped
+   * here; the key it refers to was always Seed Vault's and is untouched.
+   */
+  const onDisconnect = async () => {
+    await secureStore.del(WALLET_KEY);
+    setWallet(null);
+    onAgain();
+    setScreen("connect");
   };
 
   const onConnect = () =>
     run("Connecting", async () => {
-      setWallet(await connectWallet());
+      keepWallet(await connectWallet());
       setScreen("lobby");
     });
 
@@ -547,7 +608,13 @@ export default function App() {
           </View>
         )}
 
-        {screen === "connect" && (
+        {restoring && screen === "connect" && (
+          <View style={s.card}>
+            <Text style={s.note}>Looking for your wallet…</Text>
+          </View>
+        )}
+
+        {!restoring && screen === "connect" && (
           <View style={s.card}>
             <Text style={s.lead}>
               Everyone answers the same question <Text style={s.leadStrong}>at the same time</Text>,
@@ -588,6 +655,15 @@ export default function App() {
                 onChangeText={setJoinCode}
               />
               <Button ghost label="Look at the room" onPress={onFind} disabled={!!busy || !joinCode} />
+            </View>
+
+            <View style={s.walletRow}>
+              <Text style={s.note}>
+                {wallet ? `${shortKey(wallet.address)} · ${wallet.label}` : ""}
+              </Text>
+              <Text style={s.disconnect} onPress={onDisconnect}>
+                Disconnect
+              </Text>
             </View>
           </>
         )}
@@ -698,29 +774,3 @@ export default function App() {
 }
 
 /* -------------------------------------------------------------- pieces */
-
-export function Button({
-  label,
-  onPress,
-  disabled,
-  ghost,
-}: {
-  label: string;
-  onPress(): void;
-  disabled?: boolean;
-  ghost?: boolean;
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [
-        ghost ? s.btnGhost : s.btn,
-        pressed && s.btnPressed,
-        disabled && s.btnDisabled,
-      ]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <Text style={ghost ? s.btnGhostText : s.btnText}>{label}</Text>
-    </Pressable>
-  );
-}

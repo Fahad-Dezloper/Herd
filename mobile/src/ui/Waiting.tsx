@@ -6,7 +6,7 @@ import type { RoomState } from "../lib/herd";
 import { EndingTally } from "./EndingPick";
 import { Seats } from "./Seats";
 import { s } from "./styles";
-import { Button } from "../../App";
+import { Button } from "./Button";
 
 export function Waiting({
   room,

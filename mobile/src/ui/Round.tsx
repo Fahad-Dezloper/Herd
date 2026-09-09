@@ -6,7 +6,7 @@ import { Text, TextInput, View } from "react-native";
 import type { RoomState } from "../lib/herd";
 import { Seats } from "./Seats";
 import { s } from "./styles";
-import { Button } from "../../App";
+import { Button } from "./Button";
 
 export function Round({
   room,

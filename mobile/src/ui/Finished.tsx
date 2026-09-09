@@ -12,7 +12,7 @@ import { Text, View } from "react-native";
 
 import { Ending, type RoomState } from "../lib/herd";
 import { s, shortKey, tint } from "./styles";
-import { Button } from "../../App";
+import { Button } from "./Button";
 
 export function Finished({
   room,

@@ -71,6 +71,21 @@ export const s = StyleSheet.create({
   btnGhostText: { color: colors.ink, fontWeight: "600", fontSize: 14.5 },
   btnDisabled: { opacity: 0.4 },
 
+  walletRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 22,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
+  },
+  disconnect: {
+    color: colors.faint,
+    fontSize: 12.5,
+    fontWeight: "600",
+    marginLeft: "auto",
+  },
+
   potBig: {
     color: colors.gold,
     fontSize: 34,

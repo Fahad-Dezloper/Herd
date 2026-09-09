@@ -71,6 +71,21 @@ export const s = StyleSheet.create({
   btnGhostText: { color: colors.ink, fontWeight: "600", fontSize: 14.5 },
   btnDisabled: { opacity: 0.4 },
 
+  pickRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
+  pick: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 14,
+    padding: 14,
+    gap: 4,
+  },
+  pickOn: { borderColor: colors.gold, backgroundColor: "#1c1810" },
+  pickTitle: { color: colors.muted, fontSize: 15, fontWeight: "700" },
+  pickTitleOn: { color: colors.gold },
+  pickBlurb: { color: colors.faint, fontSize: 12, lineHeight: 17 },
+
   input: {
     color: colors.ink,
     backgroundColor: colors.bg,

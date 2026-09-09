@@ -24,6 +24,21 @@ export enum Phase {
   Settled = 3,
 }
 
+/**
+ * What happens when a room comes down to two.
+ *
+ * Two players carry no signal - "match the herd" needs a herd, and with two
+ * left, same-word and different-word are symmetric under both rules, so no
+ * heads-up round can ever cull anybody. The table votes on the tiebreak at the
+ * door, before anyone knows who they would be facing.
+ */
+export enum Ending {
+  /** The last two share the pot. */
+  Split = 0,
+  /** The oracle picks one of the two, and they take all of it. */
+  Coin = 1,
+}
+
 export enum Rule {
   Undrawn = 0,
   MajoritySurvives = 1,
@@ -36,6 +51,8 @@ export interface Seat {
   alive: boolean;
   answeredRound: number;
   hasAnswered: boolean;
+  /** What this player wants to happen if they reach the final two. */
+  endingVote: Ending;
 }
 
 export interface Said {
@@ -54,6 +71,10 @@ export interface RoomState {
   round: number;
   roundEndsAt: bigint;
   rule: Rule;
+  /** The table's vote on the tiebreak, tallied when the door closed. */
+  ending: Ending;
+  /** Whether the last two were separated by the coin rather than by the herd. */
+  coinDecided: boolean;
   awaitingRule: boolean;
   seats: Seat[];
   /** What everyone said in the round that just finished. */
@@ -129,11 +150,22 @@ export class Herd {
     );
   }
 
-  joinRoom(host: PublicKey, roomId: bigint | number, player: PublicKey, session: PublicKey) {
+  /**
+   * `endingVote` is this player's say in what happens if the room comes down to
+   * two: `Ending.Split` to share the pot, `Ending.Coin` to let the oracle pick
+   * one. Majority at the door decides it for the table; a tie goes to Split.
+   */
+  joinRoom(
+    host: PublicKey,
+    roomId: bigint | number,
+    player: PublicKey,
+    session: PublicKey,
+    endingVote: Ending = Ending.Split,
+  ) {
     return this.program.build(
       "join_room",
       this.named(host, roomId, { player }),
-      session.toBytes(),
+      concat(session.toBytes(), Uint8Array.from([endingVote])),
     );
   }
 
@@ -216,6 +248,10 @@ export class Herd {
     at += 8;
     const rule = data[at] as Rule;
     at += 1;
+    const ending = data[at] as Ending;
+    at += 1;
+    const coinDecided = data[at] === 1;
+    at += 1;
     const awaitingRule = data[at] === 1;
     at += 1;
 
@@ -229,7 +265,9 @@ export class Herd {
       at += 2;
       const hasAnswered = data[at] === 1;
       at += 1;
-      seats.push({ wallet, session, alive, answeredRound, hasAnswered });
+      const endingVote = data[at] as Ending;
+      at += 1;
+      seats.push({ wallet, session, alive, answeredRound, hasAnswered, endingVote });
     }
 
     const seatCount = data[at];
@@ -261,6 +299,8 @@ export class Herd {
       round,
       roundEndsAt,
       rule,
+      ending,
+      coinDecided,
       awaitingRule,
       seats: seats.slice(0, seatCount),
       lastRound,

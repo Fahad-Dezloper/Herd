@@ -27,13 +27,17 @@ import {
   send,
   sleep,
 } from "./lib/chain";
-import { Herd, Phase, Rule } from "./lib/herd";
+import { Ending, Herd, Phase, Rule } from "./lib/herd";
 
 const idl = await Bun.file(new URL("../target/idl/herd.json", import.meta.url).pathname).json();
 const herd = new Herd(idl);
 
 const host = loadKeypair(`${process.env.HOME}/.config/solana/id.json`);
 const ROOM_ID = BigInt(Date.now() % 1_000_000);
+
+/// Which ending this table votes for. `ENDING=coin bun run game.ts` to see the
+/// oracle pick a single winner; the default splits between the final two.
+const ENDING = process.env.ENDING === "coin" ? Ending.Coin : Ending.Split;
 const STAKE = 10_000_000n; // 0.01 SOL
 const ROUND_SECONDS = 12;
 
@@ -89,7 +93,13 @@ fund.sign(host);
 await confirm(BASE_RPC, await conn.sendRawTransaction(fund.serialize()));
 
 for (const p of players) {
-  const ix = herd.joinRoom(host.publicKey, ROOM_ID, p.wallet.publicKey, p.session.publicKey);
+  const ix = herd.joinRoom(
+    host.publicKey,
+    ROOM_ID,
+    p.wallet.publicKey,
+    p.session.publicKey,
+    ENDING,
+  );
   const sig = await send(BASE_RPC, [p.wallet], [ix]);
   await confirm(BASE_RPC, sig);
 }
@@ -132,8 +142,12 @@ else bad("the room is unreadable, which would leave players blind");
 
 /* ----------------------------------------------------------- play it out */
 
+// Round one is deliberately 2 + 1 + 1. Whichever rule the oracle draws, the
+// doomed groups add up to two and exactly two players come out - which is the
+// whole point of this run, because two is where the ending the table voted for
+// finally has something to do.
 const WORDS = [
-  ["apple", "apple", "apple", "banana"],
+  ["apple", "apple", "banana", "cherry"],
   ["traffic", "traffic", "overslept", "traffic"],
   ["blue", "red", "blue", "blue"],
   ["dog", "dog", "cat", "dog"],
@@ -212,7 +226,19 @@ if (finished.phase !== Phase.Finished) {
 
   const onBase = herd.decodeRoom((await accountData(BASE_RPC, room))!);
   const winners = onBase.seats.filter((s) => s.alive).map((s) => s.wallet);
-  say(`    survivors on Solana: ${winners.length}`);
+  const wanted = ENDING === Ending.Coin ? 1 : 2;
+  say(
+    `    the table voted ${Ending[onBase.ending]}; survivors on Solana: ${winners.length}`,
+  );
+  if (winners.length === wanted) {
+    ok(
+      ENDING === Ending.Coin
+        ? "the coin left exactly one winner"
+        : "the final two both survived to share the pot",
+    );
+  } else {
+    bad(`expected ${wanted} survivor(s), got ${winners.length}`);
+  }
 
   const before = await Promise.all(winners.map((w) => lamportsOf(BASE_RPC, w)));
   await sendSession(

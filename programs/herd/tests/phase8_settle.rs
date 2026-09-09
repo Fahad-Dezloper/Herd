@@ -23,7 +23,7 @@ use solana_signer::Signer;
 
 use common::*;
 use herd::error::HerdError;
-use herd::state::{Phase, Room, Rule, Seat, MAX_ANSWER, MAX_PLAYERS};
+use herd::state::{Ending, Phase, Room, Rule, Seat, MAX_ANSWER, MAX_PLAYERS};
 
 const ROOM_ID: u64 = 11;
 const STAKE: u64 = 50_000_000;
@@ -62,6 +62,7 @@ fn ix_join(host: &Pubkey, player: &Pubkey) -> Instruction {
         .to_account_metas(None),
         data: herd::instruction::JoinRoom {
             session: Keypair::new().pubkey(),
+            ending_vote: Ending::Split,
         }
         .data(),
     }

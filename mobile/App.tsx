@@ -24,11 +24,12 @@ import {
   sleep,
   submit,
 } from "./src/lib/chain";
-import { Herd, Phase, Rule, type RoomState } from "./src/lib/herd";
+import { Ending, Herd, Phase, Rule, type RoomState } from "./src/lib/herd";
 import { explainChainError } from "./src/lib/errors";
 import { connectWallet, explainWalletError, signTransaction, type Wallet } from "./src/lib/mwa";
 import { sessionFor } from "./src/lib/session";
 import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
+import { EndingPick } from "./src/ui/EndingPick";
 import { questionFor } from "./src/questions";
 import { answered } from "./src/ui/Seats";
 import { Reveal } from "./src/ui/Reveal";
@@ -79,6 +80,8 @@ interface RoomRef {
 export default function App() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [screen, setScreen] = useState<Screen>("connect");
+  // Cast at the door and sent with whichever seat you take next, host or not.
+  const [vote, setVote] = useState<Ending>(Ending.Split);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -286,7 +289,7 @@ export default function App() {
       // than three taps into setting a game up.
       await sendAsWallet([
         herd.createRoom(host, roomId, STAKE, ROUND_SECONDS, mine.publicKey),
-        herd.joinRoom(host, roomId, host, mine.publicKey),
+        herd.joinRoom(host, roomId, host, mine.publicKey, vote),
         SystemProgram.transfer({
           fromPubkey: host,
           toPubkey: mine.publicKey,
@@ -315,7 +318,7 @@ export default function App() {
       const mine = await sessionFor(key.toBase58());
       setSession(mine);
       await sendAsWallet([
-        herd.joinRoom(host, roomId, new PublicKey(wallet!.address), mine.publicKey),
+        herd.joinRoom(host, roomId, new PublicKey(wallet!.address), mine.publicKey, vote),
       ]);
 
       setRef({ host, roomId });
@@ -342,10 +345,14 @@ export default function App() {
         );
         if (taken) continue;
         // The bot is its own session key: it only ever answers.
+        //
+        // Bots vote with whoever seated them. They exist so one person can play
+        // a game that wants twelve, and five stand-ins outvoting the only human
+        // at the table would be a strange way to honour a majority.
         await sendLocal(
           BASE_RPC,
           [bot.keypair],
-          [herd.joinRoom(host, roomId, bot.keypair.publicKey, bot.keypair.publicKey)],
+          [herd.joinRoom(host, roomId, bot.keypair.publicKey, bot.keypair.publicKey, vote)],
         );
         await sleep(600);
       }
@@ -503,6 +510,8 @@ export default function App() {
               <Button label="Open a room" onPress={onCreate} disabled={!!busy} />
             </View>
 
+            <EndingPick value={vote} onChange={setVote} disabled={!!busy} />
+
             <Text style={s.section}>OR JOIN ONE</Text>
             <View style={s.card}>
               <TextInput
@@ -618,20 +627,37 @@ function Finished({
   const survivors = room.seats.filter((x) => x.alive);
   const share = survivors.length ? pot / survivors.length : 0;
 
+  // Losing the final two to a coin is a different feeling from being
+  // out-guessed by the room, and the screen should not make you wonder which
+  // one just happened to you.
+  const coin = room.coinDecided;
+
   return (
     <View style={[s.card, youWon ? s.cardGood : s.cardBad]}>
       <Text style={s.big}>
         {youWon
-          ? survivors.length === 1
-            ? "Last one standing"
-            : "You made it to the end"
-          : "The herd moved on without you"}
+          ? coin
+            ? "The coin fell your way"
+            : survivors.length === 1
+              ? "Last one standing"
+              : "You made it to the end"
+          : coin
+            ? "You made the last two, and the coin didn't"
+            : "The herd moved on without you"}
       </Text>
       <Text style={s.body}>
-        {survivors.length === 1
-          ? "One player left after " + room.round + " rounds."
-          : survivors.length + " left after " + room.round + " rounds."}
+        {coin
+          ? `Down to two after ${room.round} rounds, and the table had voted to flip for it.`
+          : survivors.length === 1
+            ? "One player left after " + room.round + " rounds."
+            : survivors.length + " left after " + room.round + " rounds."}
       </Text>
+      {!coin && survivors.length === 2 && (
+        <Text style={s.note}>
+          Two left is the end of it — no round can separate a pair, so the table's vote to share
+          stands.
+        </Text>
+      )}
       {youWon && (
         <Text style={s.ruleLine}>
           {(share / 1e9).toFixed(3)} SOL {settled ? "paid out" : "waiting for you"}

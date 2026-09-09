@@ -18,7 +18,7 @@ use solana_signer::Signer;
 
 use common::*;
 use herd::error::HerdError;
-use herd::state::{Phase, Room};
+use herd::state::{Ending, Phase, Room};
 
 const ROOM_ID: u64 = 7;
 const STAKE: u64 = 50_000_000; // 0.05 SOL
@@ -45,6 +45,15 @@ fn ix_create(host: &Pubkey) -> Instruction {
 }
 
 fn ix_join(host: &Pubkey, player: &Pubkey, session: Pubkey) -> Instruction {
+    ix_join_voting(host, player, session, Ending::Split)
+}
+
+fn ix_join_voting(
+    host: &Pubkey,
+    player: &Pubkey,
+    session: Pubkey,
+    ending_vote: Ending,
+) -> Instruction {
     let room = room_pda(host, ROOM_ID);
     Instruction {
         program_id: herd::ID,
@@ -55,7 +64,11 @@ fn ix_join(host: &Pubkey, player: &Pubkey, session: Pubkey) -> Instruction {
             system_program: system_program::ID,
         }
         .to_account_metas(None),
-        data: herd::instruction::JoinRoom { session }.data(),
+        data: herd::instruction::JoinRoom {
+            session,
+            ending_vote,
+        }
+        .data(),
     }
 }
 
@@ -173,6 +186,50 @@ fn the_same_wallet_cannot_take_two_seats() {
     let res = send(&mut svm, &players[0], &[], &[again]);
 
     assert_program_error(&res, &code(HerdError::AlreadySeated), "a wallet must not seat twice");
+}
+
+/// The table decides its own ending at the door, and locking freezes it.
+///
+/// Cast before anyone knows who they will be facing, so nobody is choosing
+/// whether to share a pot with a specific person - only whether they would want
+/// to share one at all.
+#[test]
+fn the_table_votes_on_its_ending_and_locking_freezes_it() {
+    for (votes, expected) in [
+        (vec![Ending::Coin, Ending::Coin, Ending::Split], Ending::Coin),
+        (vec![Ending::Coin, Ending::Split, Ending::Split], Ending::Split),
+        // Dead even: nobody agreed, so nobody has anything taken away.
+        (
+            vec![Ending::Coin, Ending::Coin, Ending::Split, Ending::Split],
+            Ending::Split,
+        ),
+    ] {
+        let (mut svm, host) = setup();
+        send(&mut svm, &host, &[], &[ix_create(&host.pubkey())]).expect("create");
+
+        for vote in &votes {
+            let player = funded(&mut svm);
+            send(
+                &mut svm,
+                &player,
+                &[],
+                &[ix_join_voting(
+                    &host.pubkey(),
+                    &player.pubkey(),
+                    Keypair::new().pubkey(),
+                    *vote,
+                )],
+            )
+            .expect("join");
+        }
+
+        // Open rooms have no ending yet - it is a placeholder until the tally.
+        send(&mut svm, &host, &[], &[ix_lock(&host.pubkey())]).expect("lock");
+
+        let room = read_room(&svm, &host.pubkey());
+        assert_eq!(room.ending, expected, "votes {votes:?}");
+        assert_eq!(room.phase, Phase::Playing);
+    }
 }
 
 #[test]

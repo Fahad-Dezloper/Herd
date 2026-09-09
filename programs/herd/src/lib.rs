@@ -72,8 +72,11 @@ pub mod herd {
     /// `session` is a throwaway key the app holds. It signs answers inside the
     /// rollup so a fifteen-second round does not need a fingerprint, and it can
     /// do nothing else.
-    pub fn join_room(ctx: Context<JoinRoom>, session: Pubkey) -> Result<()> {
-        room::handle_join(ctx, session)
+    /// `ending_vote` is this player's say in what happens if the room comes
+    /// down to two: share the pot, or let the oracle pick one. Majority at the
+    /// door decides it for the whole table, ties go to a split.
+    pub fn join_room(ctx: Context<JoinRoom>, session: Pubkey, ending_vote: Ending) -> Result<()> {
+        room::handle_join(ctx, session, ending_vote)
     }
 
     /// Close the door and start round one. Base layer, host only.

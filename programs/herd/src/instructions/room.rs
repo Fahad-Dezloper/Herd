@@ -6,7 +6,7 @@ use ephemeral_rollups_sdk::anchor::delegate;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 
 use crate::error::HerdError;
-use crate::state::{Answers, Phase, Room, Rule, Seat, Vault, MAX_ANSWER, MAX_PLAYERS};
+use crate::state::{Answers, Ending, Phase, Room, Rule, Seat, Vault, MAX_ANSWER, MAX_PLAYERS};
 use crate::{ANSWERS_SEED, EPHEMERAL_RENT_BUFFER, ROOM_SEED, VAULT_SEED};
 
 /// Fewest players a room can start with.
@@ -71,6 +71,9 @@ pub fn handle_create(
     room.round = 0;
     room.round_ends_at = 0;
     room.rule = Rule::Undrawn;
+    // Tallied at lock. Until then it is a placeholder, not a decision.
+    room.ending = Ending::Split;
+    room.coin_decided = false;
     room.awaiting_rule = false;
     room.seats = [Seat::empty(); MAX_PLAYERS];
     room.seat_count = 0;
@@ -132,7 +135,7 @@ pub struct JoinRoom<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handle_join(ctx: Context<JoinRoom>, session: Pubkey) -> Result<()> {
+pub fn handle_join(ctx: Context<JoinRoom>, session: Pubkey, ending_vote: Ending) -> Result<()> {
     let stake = ctx.accounts.room.stake;
 
     {
@@ -168,6 +171,7 @@ pub fn handle_join(ctx: Context<JoinRoom>, session: Pubkey) -> Result<()> {
         alive: true,
         answered_round: 0,
         has_answered: false,
+        ending_vote,
     };
     room.seat_count += 1;
 
@@ -189,6 +193,20 @@ pub struct LockRoom<'info> {
     pub room: Box<Account<'info, Room>>,
 }
 
+
+/// Which ending a table voted for.
+///
+/// One seat, one vote - everybody paid the same stake to get in. A tie goes to
+/// Split: it is the ending that takes nothing away from anyone who is still
+/// playing, which is the only fair way to break a table that could not agree.
+pub fn tally_ending(coins: usize, splits: usize) -> Ending {
+    if coins > splits {
+        Ending::Coin
+    } else {
+        Ending::Split
+    }
+}
+
 pub fn handle_lock(ctx: Context<LockRoom>) -> Result<()> {
     let room = &mut ctx.accounts.room;
     let who = ctx.accounts.authority.key();
@@ -199,6 +217,14 @@ pub fn handle_lock(ctx: Context<LockRoom>) -> Result<()> {
     require!(room.phase == Phase::Open, HerdError::RoomNotOpen);
     require!(room.seat_count >= MIN_PLAYERS, HerdError::TooFewPlayers);
 
+    // Count the votes cast at the door. Every seat paid the same stake and gets
+    // the same one vote, and a tie falls to Split - the ending that takes
+    // nothing away from anyone, which is the right way to break a table that
+    // could not agree.
+    let coins = room.seats().iter().filter(|s| s.ending_vote == Ending::Coin).count();
+    let splits = room.seat_count as usize - coins;
+    room.ending = tally_ending(coins, splits);
+
     room.phase = Phase::Playing;
     room.round = 1;
     room.rule = Rule::Undrawn;
@@ -207,7 +233,13 @@ pub fn handle_lock(ctx: Context<LockRoom>) -> Result<()> {
     // `seal_room`. Base-layer time would be spent on the delegation round trip.
     room.round_ends_at = 0;
 
-    msg!("herd: room locked with {} players", room.seat_count);
+    msg!(
+        "herd: room locked with {} players, ending {:?} ({} coin / {} split)",
+        room.seat_count,
+        room.ending,
+        coins,
+        splits
+    );
     Ok(())
 }
 
@@ -323,6 +355,8 @@ mod delegate_layout_tests {
             round: 0,
             round_ends_at: 0,
             rule: Rule::Undrawn,
+            ending: Ending::Split,
+            coin_decided: false,
             awaiting_rule: false,
             seats: [Seat {
                 wallet: Pubkey::default(),
@@ -330,6 +364,7 @@ mod delegate_layout_tests {
                 alive: false,
                 answered_round: 0,
                 has_answered: false,
+                ending_vote: Ending::Split,
             }; MAX_PLAYERS],
             seat_count: 0,
             last_round: 0,

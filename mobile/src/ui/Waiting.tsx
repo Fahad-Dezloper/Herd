@@ -2,7 +2,7 @@
 
 import { Text, View } from "react-native";
 
-import type { RoomState } from "../lib/herd";
+import { Ending, type RoomState } from "../lib/herd";
 import { Seats } from "./Seats";
 import { s } from "./styles";
 import { Button } from "../../App";
@@ -45,6 +45,8 @@ export function Waiting({
       <Text style={s.section}>IN THE ROOM</Text>
       <Seats room={room} />
 
+      <EndingTally room={room} />
+
       {isHost ? (
         <View style={{ marginTop: 18, gap: 10 }}>
           {unseatedBots > 0 && (
@@ -73,5 +75,30 @@ export function Waiting({
         <Text style={[s.note, { marginTop: 18 }]}>Waiting for the host to start.</Text>
       )}
     </>
+  );
+}
+
+/**
+ * Where the table's vote stands.
+ *
+ * Shown while the door is still open, because a vote you cannot see the state
+ * of is not really a vote - somebody about to take the last seat should be able
+ * to tell whether they are the one who decides it.
+ */
+function EndingTally({ room }: { room: RoomState }) {
+  const coins = room.seats.filter((seat) => seat.endingVote === Ending.Coin).length;
+  const splits = room.seats.length - coins;
+  const winning = coins > splits ? "a coin flip" : "a split";
+
+  return (
+    <View style={[s.card, { marginTop: 14 }]}>
+      <Text style={s.note}>IF IT COMES DOWN TO TWO</Text>
+      <Text style={s.body}>
+        <Text style={s.leadStrong}>{winning}</Text>
+        {coins === splits
+          ? ` — the room is split ${coins}–${splits}, and a tie means you share.`
+          : ` — ${Math.max(coins, splits)} of ${room.seats.length} want it that way.`}
+      </Text>
+    </View>
   );
 }

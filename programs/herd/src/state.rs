@@ -34,6 +34,10 @@ pub struct Seat {
     /// Whether `answered_round` refers to a real answer rather than seat zero
     /// never having played.
     pub has_answered: bool,
+
+    /// What this player wants to happen if they reach the final two. Cast at
+    /// the door, before they know who they would be facing.
+    pub ending_vote: Ending,
 }
 
 impl Seat {
@@ -44,6 +48,7 @@ impl Seat {
             alive: false,
             answered_round: 0,
             has_answered: false,
+            ending_vote: Ending::Split,
         }
     }
 
@@ -70,6 +75,21 @@ pub enum Phase {
 /// Drawn by VRF *after* every answer is sealed, which is the entire defence
 /// against collusion: a bloc that agrees on one answer is the largest group,
 /// and half the time being the largest group is what kills you.
+/// How a room settles when it comes down to two.
+///
+/// Two players carry no signal. "Match the herd" needs a herd, and with two
+/// people left same-word and different-word are symmetric under both rules - no
+/// rule can separate them, so every heads-up round culls nobody. Something has
+/// to break the symmetry, and rather than picking one for everybody, the table
+/// picks its own before a word is played.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
+pub enum Ending {
+    /// The last two share the pot. Outlasting everyone else is the win.
+    Split,
+    /// The oracle picks one of the two, and they take all of it.
+    Coin,
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
 pub enum Rule {
     /// Not drawn yet. Nobody, including the players, can know which way it goes.
@@ -105,6 +125,18 @@ pub struct Room {
     /// Unix time after which the round can be closed by anyone.
     pub round_ends_at: i64,
     pub rule: Rule,
+
+    /// The table's answer to "what happens at two", tallied when the door
+    /// closes and fixed from then on - so nobody picks the ending once they can
+    /// see who they would be picking it against.
+    pub ending: Ending,
+
+    /// Whether the last two were separated by the coin rather than by the herd.
+    ///
+    /// Worth a byte. Without it a player who reached the final two and lost
+    /// cannot tell whether the room out-guessed them or a coin did, and "you
+    /// are out" with no reason reads as a bug rather than as a game.
+    pub coin_decided: bool,
     /// A VRF request is outstanding. Blocks a second request for the same round.
     pub awaiting_rule: bool,
 

@@ -12,7 +12,7 @@ use ephemeral_rollups_sdk::vrf::instructions::{
 use ephemeral_rollups_sdk::vrf::{self as vrf_api};
 
 use crate::error::HerdError;
-use crate::state::{Answers, Phase, Room, Rule, MAX_ANSWER, MAX_PLAYERS, MAX_ROUNDS};
+use crate::state::{Answers, Ending, Phase, Room, Rule, MAX_ANSWER, MAX_PLAYERS, MAX_ROUNDS};
 use crate::{ANSWERS_SEED, ROOM_SEED};
 
 /* ------------------------------------------------------------------- seal */
@@ -304,6 +304,30 @@ pub fn handle_callback(ctx: Context<CallbackRound>, randomness: [u8; 32]) -> Res
         room.alive_count()
     );
 
+    // Down to two, and the room has to be ended deliberately - no heads-up
+    // round can ever cull anybody (same word is one group of two, different
+    // words are two groups of one, and both rules would empty the room, so the
+    // guard stops them). Left alone, the last two would trade words until the
+    // round cap with nothing at stake. The table voted on this at the door.
+    if room.alive_count() == 2 {
+        match room.ending {
+            Ending::Split => {
+                msg!("herd: two left and the table voted to split");
+            }
+            Ending::Coin => {
+                // The same draw that decided the rule decides this. Byte 0 is
+                // already spoken for; byte 1 is independent of it and just as
+                // unpredictable, so the flip costs no second oracle round trip
+                // and no extra round of waiting.
+                flip_heads_up(room, randomness[1]);
+                room.coin_decided = true;
+                msg!("herd: two left, the coin fell - one takes it all");
+            }
+        }
+        room.phase = Phase::Finished;
+        return Ok(());
+    }
+
     if room.alive_count() <= 1 || room.round >= MAX_ROUNDS {
         room.phase = Phase::Finished;
         return Ok(());
@@ -335,6 +359,22 @@ pub fn handle_callback(ctx: Context<CallbackRound>, randomness: [u8; 32]) -> Res
 /// produces, nobody goes and the next round starts with the same players. That
 /// is not a special case bolted on, it is the difference between a deadlock and
 /// a game with no winner.
+/// Cull one of the last two at random, leaving a single winner.
+///
+/// The byte comes from the same VRF draw that decided the round's rule. Byte 0
+/// is already spoken for; byte 1 is independent of it and just as unpredictable,
+/// so the flip costs no second trip to the oracle and no extra round of waiting.
+pub fn flip_heads_up(room: &mut Room, byte: u8) {
+    let keep_second = byte % 2 == 1;
+    let mut seen = 0;
+    for seat in room.seats.iter_mut().filter(|s| s.alive) {
+        if (seen == 1) != keep_second {
+            seat.alive = false;
+        }
+        seen += 1;
+    }
+}
+
 pub fn resolve_round(room: &mut Room, answers: &Answers, rule: Rule) -> usize {
     let count = room.seat_count as usize;
     let round = room.round;
@@ -479,6 +519,7 @@ mod tests {
                 alive: true,
                 answered_round: 1,
                 has_answered: text.is_some(),
+                ending_vote: Ending::Split,
             };
             if let Some(text) = text {
                 answers.words[i][..text.len()].copy_from_slice(text.as_bytes());
@@ -496,6 +537,8 @@ mod tests {
             round: 1,
             round_ends_at: 0,
             rule: Rule::Undrawn,
+            ending: Ending::Split,
+            coin_decided: false,
             awaiting_rule: false,
             seats,
             seat_count: said.len() as u8,
@@ -615,6 +658,66 @@ mod tests {
 
         assert_eq!(resolve_round(&mut room, &answers, Rule::MajoritySurvives), 0);
         assert_eq!(room.alive_count(), 4);
+    }
+
+    /// Two players cannot resolve, under either rule, either way they answer.
+    ///
+    /// Same word: one group of two, and culling it would empty the room. Two
+    /// different words: two groups of one, tied, and culling both would empty
+    /// the room. The no-empty guard is total at two, so a heads-up round is
+    /// always a no-op and the room grinds to the round cap.
+    /// The coin keeps exactly one of the two, and neither is favoured.
+    ///
+    /// A flip that quietly preferred the lower seat would hand every coin-vote
+    /// room to whoever joined first, and nobody would notice until somebody
+    /// counted. So this counts.
+    #[test]
+    fn the_coin_keeps_one_of_the_two_and_favours_neither() {
+        let mut first = 0;
+        let mut second = 0;
+
+        for byte in 0u8..=255 {
+            let (mut room, _) = room_with(&[Some("fire"), Some("water")]);
+            flip_heads_up(&mut room, byte);
+
+            assert_eq!(room.alive_count(), 1, "byte {byte} left {} alive", room.alive_count());
+            if room.seats[0].alive {
+                first += 1;
+            } else {
+                second += 1;
+            }
+        }
+
+        assert_eq!(first, 128);
+        assert_eq!(second, 128);
+    }
+
+    /// A table gets the ending it voted for, and a split table gets Split.
+    #[test]
+    fn the_table_votes_on_its_own_ending() {
+        use crate::instructions::room::tally_ending;
+
+        assert_eq!(tally_ending(3, 2), Ending::Coin);
+        assert_eq!(tally_ending(2, 3), Ending::Split);
+        // Nobody agreed, so nobody loses anything they were still playing for.
+        assert_eq!(tally_ending(3, 3), Ending::Split);
+        assert_eq!(tally_ending(0, 0), Ending::Split);
+    }
+
+    #[test]
+    fn two_players_can_never_resolve() {
+        for rule in [Rule::MajoritySurvives, Rule::MinoritySurvives] {
+            for said in [["fire", "fire"], ["fire", "water"]] {
+                let with: Vec<Option<&str>> = said.iter().map(|w| Some(*w)).collect();
+                let (mut room, answers) = room_with(&with);
+                let culled = resolve_round(&mut room, &answers, rule);
+                assert_eq!(
+                    culled, 0,
+                    "{rule:?} culled somebody from {said:?} - the guard should have stopped it"
+                );
+                assert_eq!(room.alive_count(), 2);
+            }
+        }
     }
 
     #[test]

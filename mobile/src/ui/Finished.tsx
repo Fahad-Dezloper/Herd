@@ -107,8 +107,35 @@ export function Finished({
 
       <LastWords room={room} you={you} />
 
+      {!settled && (
+        <View style={[s.card, { marginTop: 14 }]}>
+          <Text style={s.note}>STILL TO DO</Text>
+          <Text style={s.body}>
+            The pot is sitting in the room's vault on Solana. One transaction hands the room back
+            from the rollup and pays it out. The program works out who won from its own seats rather
+            than being told, so it cannot pay anybody else.
+          </Text>
+          <Text style={s.note}>
+            Your session key sends it, so there is no fingerprint and nothing to approve. Anyone who
+            was in the room can do it, and until somebody does, the money stays where it is.
+          </Text>
+        </View>
+      )}
+
       <View style={{ marginTop: 18, gap: 10 }}>
-        {!settled && <Button label="Pay out the pot" onPress={onSettle} disabled={busy} />}
+        {!settled && (
+          <Button
+            label={
+              youWon
+                ? `Collect ${(share / 1e9).toFixed(3)} SOL`
+                : survivors.length === 1
+                  ? "Pay the winner"
+                  : "Pay the survivors"
+            }
+            onPress={onSettle}
+            disabled={busy}
+          />
+        )}
         <Button
           ghost={!settled}
           label="Play another"

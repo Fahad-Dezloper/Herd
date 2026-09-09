@@ -68,9 +68,18 @@ export function Round({
             Sealed. Nobody can read it — not the other players, not the host, not us.
           </Text>
         </View>
-      ) : room.awaitingRule ? (
+      ) : room.awaitingRule || left <= 0 ? (
         <View style={s.card}>
-          <Text style={s.body}>Round closed. Drawing the rule…</Text>
+          <Text style={s.body}>
+            {room.awaitingRule
+              ? "Round closed. Drawing the rule…"
+              : "Time's up. Closing the round…"}
+          </Text>
+          <Text style={s.note}>
+            {sealed
+              ? "Your answer is in."
+              : "No answer from you this round — silence counts as straying."}
+          </Text>
         </View>
       ) : (
         <View style={{ gap: 11 }}>

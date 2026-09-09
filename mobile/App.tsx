@@ -25,6 +25,7 @@ import {
   submit,
 } from "./src/lib/chain";
 import { Herd, Phase, Rule, type RoomState } from "./src/lib/herd";
+import { explainChainError } from "./src/lib/errors";
 import { connectWallet, explainWalletError, signTransaction, type Wallet } from "./src/lib/mwa";
 import { sessionFor } from "./src/lib/session";
 import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
@@ -39,7 +40,14 @@ import idl from "./src/idl.json";
 const herd = new Herd(idl);
 
 const STAKE = 10_000_000n; // 0.01 SOL
-const ROUND_SECONDS = 15;
+/**
+ * Seconds in a round.
+ *
+ * Fifteen was too tight. The clock starts when the room is sealed, which is the
+ * last step of setting the game up - so a player is still reading the question
+ * while it runs, and the first round was expiring before anyone could type.
+ */
+const ROUND_SECONDS = 30;
 
 /**
  * What the session key gets at the door.
@@ -157,9 +165,11 @@ export default function App() {
           [herd.closeRound(ref!.host, ref!.roomId, session.publicKey, room.round)],
           endpoint.token,
         );
-      } catch {
-        // Someone else got there first, which is fine - that is the point of
-        // letting anyone close a round.
+      } catch (e) {
+        // Someone else closing it first is expected and fine - that is the point
+        // of letting anyone close a round. Anything else is worth seeing.
+        const why = explainChainError(e);
+        if (why && !/hasn't finished|already/i.test(why)) setError(why);
       } finally {
         setTimeout(() => (closing.current = false), 4000);
       }
@@ -212,7 +222,8 @@ export default function App() {
     try {
       await fn();
     } catch (e) {
-      setError(explainWalletError(e));
+      // A chain error the player can act on beats a correct one they cannot.
+      setError(explainChainError(e) ?? explainWalletError(e));
     } finally {
       setBusy(null);
     }

@@ -1,0 +1,236 @@
+/**
+ * PHASE 9 - the whole game, live on devnet.
+ *
+ * Four players, real stakes, a real TEE rollup and the real VRF oracle. Every
+ * claim the pitch makes has to be visible in this transcript or it is not true:
+ *
+ *   - answers are unreadable while a round is open, to everyone;
+ *   - who has answered is visible, which is the tension;
+ *   - the rule is drawn after the answers are locked;
+ *   - the pot pays out on Solana from a vault the rollup never touched.
+ *
+ * Run:  bun run game.ts
+ */
+
+import { Keypair, PublicKey, SystemProgram, Transaction, Connection } from "@solana/web3.js";
+
+import {
+  BASE_RPC,
+  TEE_VALIDATOR,
+  accountData,
+  authenticate,
+  confirm,
+  delegationOf,
+  lamportsOf,
+  loadKeypair,
+  send,
+  sleep,
+} from "./lib/chain";
+import { Herd, Phase, Rule } from "./lib/herd";
+
+const idl = await Bun.file(new URL("../target/idl/herd.json", import.meta.url).pathname).json();
+const herd = new Herd(idl);
+
+const host = loadKeypair(`${process.env.HOME}/.config/solana/id.json`);
+const ROOM_ID = BigInt(Date.now() % 1_000_000);
+const STAKE = 10_000_000n; // 0.01 SOL
+const ROUND_SECONDS = 12;
+
+const room = herd.room(host.publicKey, ROOM_ID);
+const answers = herd.answers(room);
+const vault = herd.vault(room);
+
+const say = console.log;
+const ok = (s: string) => say(`   PASS  ${s}`);
+const bad = (s: string) => say(`   FAIL  ${s}`);
+
+say(`room    ${room.toBase58()}`);
+say(`answers ${answers.toBase58()}`);
+say(`vault   ${vault.toBase58()}\n`);
+
+/* ------------------------------------------------------------ seat them */
+
+say("[1] open a room and seat four players");
+await sendBase([herd.createRoom(host.publicKey, ROOM_ID, STAKE, ROUND_SECONDS)], "create");
+
+const players = Array.from({ length: 4 }, () => ({
+  wallet: Keypair.generate(),
+  session: Keypair.generate(),
+}));
+
+// Fund the wallets so they can pay their own stake and fees.
+const conn = new Connection(BASE_RPC, "confirmed");
+const fund = new Transaction();
+players.forEach((p) =>
+  fund.add(
+    SystemProgram.transfer({
+      fromPubkey: host.publicKey,
+      toPubkey: p.wallet.publicKey,
+      lamports: Number(STAKE) + 5_000_000,
+    }),
+  ),
+);
+const { blockhash } = await conn.getLatestBlockhash();
+fund.feePayer = host.publicKey;
+fund.recentBlockhash = blockhash;
+fund.sign(host);
+await confirm(BASE_RPC, await conn.sendRawTransaction(fund.serialize()));
+
+for (const p of players) {
+  const ix = herd.joinRoom(host.publicKey, ROOM_ID, p.wallet.publicKey, p.session.publicKey);
+  const sig = await send(BASE_RPC, [p.wallet], [ix]);
+  await confirm(BASE_RPC, sig);
+}
+say(`    four seats taken, vault holds ${await lamportsOf(BASE_RPC, vault)} lamports`);
+
+await sendBase([herd.lockRoom(host.publicKey, ROOM_ID)], "lock");
+
+/* ------------------------------------------------- hand it to the rollup */
+
+say("\n[2] delegate the room and its answers to the TEE");
+await sendBase([herd.delegateRoom(host.publicKey, ROOM_ID, TEE_VALIDATOR)], "delegate");
+await sleep(3000);
+
+const status = await delegationOf(room);
+const answersStatus = await delegationOf(answers);
+say(`    room    -> ${status.fqdn} (${status.isDelegated})`);
+say(`    answers -> ${answersStatus.fqdn} (${answersStatus.isDelegated})`);
+if (!status.fqdn) throw new Error("the room did not delegate");
+
+const ER = status.fqdn.replace(/\/$/, "");
+const token = await authenticate(ER, host);
+
+say("\n[3] seal the answers");
+await sendER([herd.sealRoom(host.publicKey, ROOM_ID)], [host], "seal");
+await sleep(2000);
+
+const sealedRead = await accountData(ER, answers, token);
+if (sealedRead) bad("the answers are still readable");
+else ok("the answers are refused to everyone, host included");
+
+const roomRead = await accountData(ER, room, token);
+if (roomRead) ok("the room itself is still readable - players can see the game");
+else bad("the room is unreadable, which would leave players blind");
+
+/* ----------------------------------------------------------- play it out */
+
+const WORDS = [
+  ["apple", "apple", "apple", "banana"],
+  ["traffic", "traffic", "overslept", "traffic"],
+  ["blue", "red", "blue", "blue"],
+  ["dog", "dog", "cat", "dog"],
+];
+
+for (let round = 1; round <= 8; round++) {
+  const before = herd.decodeRoom((await accountData(ER, room, token))!);
+  if (before.phase !== Phase.Playing) break;
+
+  const alive = before.seats.filter((s) => s.alive);
+  say(`\n[round ${before.round}]  ${alive.length} still in`);
+
+  const words = WORDS[(before.round - 1) % WORDS.length];
+  for (let i = 0; i < players.length; i++) {
+    const seat = before.seats[i];
+    if (!seat.alive) continue;
+    const ix = herd.submitAnswer(
+      host.publicKey,
+      ROOM_ID,
+      players[i].session.publicKey,
+      words[i],
+    );
+    await sendER([ix], [players[i].session], `answer ${i}`);
+  }
+
+  // What the other players can see while the window is open.
+  const mid = herd.decodeRoom((await accountData(ER, room, token))!);
+  const sealedCount = mid.seats.filter(
+    (s) => s.hasAnswered && s.answeredRound === mid.round,
+  ).length;
+  say(`    ${sealedCount} answers sealed; the words themselves: ${
+    (await accountData(ER, answers, token)) ? "READABLE" : "refused"
+  }`);
+
+  // Wait out the clock, then close. Anyone may close a round.
+  const now = Math.floor(Date.now() / 1000);
+  const wait = Number(mid.roundEndsAt) - now + 2;
+  if (wait > 0) await sleep(wait * 1000);
+
+  await sendER([herd.closeRound(host.publicKey, ROOM_ID, host.publicKey, round)], [host], "close");
+  say("    round closed, rule requested from the oracle");
+
+  let after = null;
+  for (let i = 0; i < 20; i++) {
+    await sleep(1500);
+    const state = herd.decodeRoom((await accountData(ER, room, token))!);
+    if (!state.awaitingRule) {
+      after = state;
+      break;
+    }
+  }
+  if (!after) {
+    bad("the oracle never answered");
+    break;
+  }
+
+  const ruleName = after.rule === Rule.MinoritySurvives ? "minority survives" : "majority survives";
+  const stillIn = after.seats.filter((s) => s.alive).length;
+  say(`    rule drawn: ${ruleName} -> ${alive.length - stillIn} culled, ${stillIn} left`);
+
+  if (after.phase === Phase.Finished) {
+    say(`\n[4] the game is over`);
+    break;
+  }
+}
+
+/* --------------------------------------------------------------- payout */
+
+const finished = herd.decodeRoom((await accountData(ER, room, token))!);
+if (finished.phase !== Phase.Finished) {
+  bad(`the game did not finish (phase ${finished.phase})`);
+} else {
+  say("\n[5] hand the room back to Solana and pay out");
+  await sendER([herd.finishRoom(host.publicKey, ROOM_ID, host.publicKey)], [host], "finish");
+  await sleep(14000);
+
+  const onBase = herd.decodeRoom((await accountData(BASE_RPC, room))!);
+  const winners = onBase.seats.filter((s) => s.alive).map((s) => s.wallet);
+  say(`    survivors on Solana: ${winners.length}`);
+
+  const before = await Promise.all(winners.map((w) => lamportsOf(BASE_RPC, w)));
+  await sendBase(
+    [herd.settle(host.publicKey, ROOM_ID, host.publicKey, winners)],
+    "settle",
+  );
+
+  const after = await Promise.all(winners.map((w) => lamportsOf(BASE_RPC, w)));
+  const paid = after.map((a, i) => (a ?? 0) - (before[i] ?? 0));
+  say(`    paid out: ${paid.join(", ")} lamports`);
+  say(`    vault now holds ${await lamportsOf(BASE_RPC, vault)} (rent only)`);
+
+  if (paid.every((p) => p > 0)) ok("the pot reached the winners on Solana");
+  else bad("nobody was paid");
+}
+
+/* ---------------------------------------------------------------- utils */
+
+async function sendBase(ixs: any[], label: string) {
+  try {
+    const sig = await send(BASE_RPC, [host], ixs);
+    await confirm(BASE_RPC, sig);
+    return sig;
+  } catch (e: any) {
+    say(`    ${label} failed: ${String(e.message).split("\n").slice(0, 3).join(" | ")}`);
+    throw e;
+  }
+}
+
+async function sendER(ixs: any[], signers: Keypair[], label: string) {
+  try {
+    const sig = await send(ER, signers, ixs, token);
+    await confirm(ER, sig, token);
+    return sig;
+  } catch (e: any) {
+    say(`    ${label} failed: ${String(e.message).split("\n").slice(0, 3).join(" | ")}`);
+    throw e;
+  }
+}

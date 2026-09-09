@@ -18,6 +18,7 @@ export function Round({
   busy,
   onChange,
   onSubmit,
+  onLeave,
 }: {
   room: RoomState;
   question: string;
@@ -28,6 +29,8 @@ export function Round({
   busy: boolean;
   onChange(v: string): void;
   onSubmit(): void;
+  /** Stop watching and go start another game. */
+  onLeave(): void;
 }) {
   const [left, setLeft] = useState(0);
 
@@ -57,9 +60,18 @@ export function Round({
       <Text style={s.question}>{question}</Text>
 
       {!alive ? (
-        <View style={[s.card, s.cardBad]}>
-          <Text style={s.errTitle}>You're out</Text>
-          <Text style={s.err}>Watching the rest play for the pot.</Text>
+        <View style={{ gap: 11 }}>
+          <View style={[s.card, s.cardBad]}>
+            <Text style={s.errTitle}>You're out</Text>
+            <Text style={s.err}>
+              Watching the rest play for the pot. Your stake is already in it.
+            </Text>
+          </View>
+          {/* Being out is not a reason to be stuck. Nothing here is waiting on
+              you - the survivors finish the game and the winner collects it -
+              so leaving costs nothing and starting another game is the more
+              likely thing to want. */}
+          <Button ghost label="Leave and start another" onPress={onLeave} disabled={busy} />
         </View>
       ) : sealed ? (
         <View style={[s.card, s.cardGold, s.sealed]}>

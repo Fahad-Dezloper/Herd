@@ -82,7 +82,7 @@ players.forEach((p) =>
     SystemProgram.transfer({
       fromPubkey: host.publicKey,
       toPubkey: p.wallet.publicKey,
-      lamports: Number(STAKE) + 5_000_000,
+      lamports: Number(STAKE) + 10_000_000,
     }),
   ),
 );
@@ -100,7 +100,17 @@ for (const p of players) {
     p.session.publicKey,
     ENDING,
   );
-  const sig = await send(BASE_RPC, [p.wallet], [ix]);
+  // Exactly what the app does: the stake and the session key's fuel go in one
+  // transaction, because a winner who only joined still has to be able to hand
+  // the room back and pay the pot out by themselves.
+  const sig = await send(BASE_RPC, [p.wallet], [
+    ix,
+    SystemProgram.transfer({
+      fromPubkey: p.wallet.publicKey,
+      toPubkey: p.session.publicKey,
+      lamports: 5_000_000,
+    }),
+  ]);
   await confirm(BASE_RPC, sig);
 }
 say(`    four seats taken, vault holds ${await lamportsOf(BASE_RPC, vault)} lamports`);
@@ -221,7 +231,23 @@ if (finished.phase !== Phase.Finished) {
   bad(`the game did not finish (phase ${finished.phase})`);
 } else {
   say("\n[5] hand the room back to Solana and pay out");
-  await sendER([herd.finishRoom(host.publicKey, ROOM_ID, session.publicKey)], [session], "finish");
+
+  // Deliberately not the host's key. Whoever is left standing finishes the game
+  // and collects, using the session key funded when they took their seat - the
+  // host may have been out for six rounds and closed the app.
+  const stillIn = herd
+    .decodeRoom((await accountData(ER, room, token))!)
+    .seats.filter((seat) => seat.alive)
+    .map((seat) => seat.wallet.toBase58());
+  const champion = players.find((p) => stillIn.includes(p.wallet.publicKey.toBase58()));
+  if (!champion) throw new Error("no surviving player to settle with");
+  say(`    settled by ${champion.wallet.publicKey.toBase58().slice(0, 8)}…, a player, not the host`);
+
+  await sendER(
+    [herd.finishRoom(host.publicKey, ROOM_ID, champion.session.publicKey)],
+    [champion.session],
+    "finish",
+  );
   await sleep(14000);
 
   const onBase = herd.decodeRoom((await accountData(BASE_RPC, room))!);
@@ -252,8 +278,8 @@ if (finished.phase !== Phase.Finished) {
 
   const before = await Promise.all(winners.map((w) => lamportsOf(BASE_RPC, w)));
   await sendSession(
-    [session],
-    [herd.settle(host.publicKey, ROOM_ID, session.publicKey, winners)],
+    [champion.session],
+    [herd.settle(host.publicKey, ROOM_ID, champion.session.publicKey, winners)],
     "settle",
   );
 

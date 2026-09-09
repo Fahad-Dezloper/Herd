@@ -107,7 +107,7 @@ export function Finished({
 
       <LastWords room={room} you={you} />
 
-      {!settled && (
+      {!settled && youWon && (
         <View style={[s.card, { marginTop: 14 }]}>
           <Text style={s.note}>STILL TO DO</Text>
           <Text style={s.body}>
@@ -116,28 +116,29 @@ export function Finished({
             than being told, so it cannot pay anybody else.
           </Text>
           <Text style={s.note}>
-            Your session key sends it, so there is no fingerprint and nothing to approve. Anyone who
-            was in the room can do it, and until somebody does, the money stays where it is.
+            Your session key sends it, so there is no fingerprint and nothing to approve. Nobody
+            else has to be here for it, and the pot keeps until you do.
           </Text>
         </View>
       )}
 
+      {!settled && !youWon && (
+        <Text style={[s.note, { marginTop: 14 }]}>
+          Nothing for you to do here — collecting is the winner's to make, and the vault holds the
+          pot on Solana until they do.
+        </Text>
+      )}
+
       <View style={{ marginTop: 18, gap: 10 }}>
-        {!settled && (
+        {!settled && youWon && (
           <Button
-            label={
-              youWon
-                ? `Collect ${(share / 1e9).toFixed(3)} SOL`
-                : survivors.length === 1
-                  ? "Pay the winner"
-                  : "Pay the survivors"
-            }
+            label={`Collect ${(share / 1e9).toFixed(3)} SOL`}
             onPress={onSettle}
             disabled={busy}
           />
         )}
         <Button
-          ghost={!settled}
+          ghost={!settled && youWon}
           label="Play another"
           onPress={onAgain}
           disabled={busy}

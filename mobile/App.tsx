@@ -66,6 +66,21 @@ const SESSION_FUEL = 40_000_000n; // 0.04 SOL
 /** Stake plus enough for a bot to pay its own transaction fees. */
 const BOT_FUEL = 12_000_000n; // 0.012 SOL
 
+/**
+ * What a joining player's session key gets, in the same transaction as the
+ * stake.
+ *
+ * Enough to hand the room back from the rollup and pay the pot out, which is
+ * all a player who is not the host ever needs it for. Without it a winner who
+ * merely joined could not collect their own winnings - every ending would
+ * depend on the host still being around, which is exactly the person with the
+ * least reason to be once they are out.
+ *
+ * Answering costs nothing: rollup transactions are not charged, so the key
+ * needs no fuel for the game itself.
+ */
+const JOIN_FUEL = 5_000_000n; // 0.005 SOL
+
 /** Roughly what opening a game costs, before anyone joins. */
 const HOST_COST = (bots: number) =>
   STAKE + SESSION_FUEL + BOT_FUEL * BigInt(bots) + 25_000_000n; // + account rent
@@ -439,6 +454,11 @@ export default function App() {
       setSession(mine);
       await sendAsWallet([
         herd.joinRoom(host, roomId, new PublicKey(wallet!.address), mine.publicKey, vote),
+        SystemProgram.transfer({
+          fromPubkey: new PublicKey(wallet!.address),
+          toPubkey: mine.publicKey,
+          lamports: Number(JOIN_FUEL),
+        }),
       ]);
 
       setRef({ host, roomId });
@@ -742,6 +762,7 @@ export default function App() {
             busy={!!busy}
             onChange={setAnswer}
             onSubmit={onAnswer}
+            onLeave={onAgain}
           />
         )}
 

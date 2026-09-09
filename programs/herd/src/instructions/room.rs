@@ -199,6 +199,76 @@ pub struct LockRoom<'info> {
 /// One seat, one vote - everybody paid the same stake to get in. A tie goes to
 /// Split: it is the ending that takes nothing away from anyone who is still
 /// playing, which is the only fair way to break a table that could not agree.
+#[derive(Accounts)]
+pub struct LeaveRoom<'info> {
+    #[account(mut)]
+    pub player: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [ROOM_SEED, room.host.as_ref(), &room.room_id.to_le_bytes()],
+        bump = room.bump
+    )]
+    pub room: Box<Account<'info, Room>>,
+
+    #[account(
+        mut,
+        seeds = [VAULT_SEED, room.key().as_ref()],
+        bump = room.vault_bump,
+        has_one = room
+    )]
+    pub vault: Account<'info, Vault>,
+}
+
+/// Take your seat back while the door is still open.
+///
+/// Without this a stake could be lost to nothing happening. A room needs three
+/// people to start, so a host who opens one, takes a friend's stake and then
+/// never finds a third player leaves both of them paid into a vault with no
+/// instruction that can ever pay them out. The same is true of a host who
+/// simply closes the app before pressing start.
+///
+/// Only while the room is Open. Once it locks the stake is in play and leaving
+/// would be a way to walk out of a game you were losing with your money back.
+pub fn handle_leave(ctx: Context<LeaveRoom>) -> Result<()> {
+    require!(
+        ctx.accounts.room.phase == Phase::Open,
+        HerdError::RoomNotOpen
+    );
+
+    let who = ctx.accounts.player.key();
+    let room = &mut ctx.accounts.room;
+    let seat = room
+        .seats()
+        .iter()
+        .position(|s| s.wallet == who)
+        .ok_or(error!(HerdError::NotAPlayer))?;
+
+    // Seats close up behind the one that left, so seat order stays the order
+    // people arrived in and nothing has to understand a hole in the middle.
+    let count = room.seat_count as usize;
+    for i in seat..count - 1 {
+        room.seats[i] = room.seats[i + 1];
+    }
+    room.seats[count - 1] = Seat::empty();
+    room.seat_count -= 1;
+
+    let stake = room.stake;
+    let vault = ctx.accounts.vault.to_account_info();
+    **vault.try_borrow_mut_lamports()? = vault
+        .lamports()
+        .checked_sub(stake)
+        .ok_or(HerdError::Overflow)?;
+    let player = ctx.accounts.player.to_account_info();
+    **player.try_borrow_mut_lamports()? = player
+        .lamports()
+        .checked_add(stake)
+        .ok_or(HerdError::Overflow)?;
+
+    msg!("herd: seat {} left, {} refunded", seat, stake);
+    Ok(())
+}
+
 pub fn tally_ending(coins: usize, splits: usize) -> Ending {
     if coins > splits {
         Ending::Coin

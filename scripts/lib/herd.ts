@@ -180,6 +180,11 @@ export class Herd {
     );
   }
 
+  /** Take a seat back, and the stake with it. Only while the room is open. */
+  leaveRoom(host: PublicKey, roomId: bigint | number, player: PublicKey) {
+    return this.program.build("leave_room", this.named(host, roomId, { player }));
+  }
+
   /** `authority` is the host, or the host's session key. */
   lockRoom(host: PublicKey, roomId: bigint | number, authority: PublicKey) {
     return this.program.build("lock_room", this.named(host, roomId, { authority }));

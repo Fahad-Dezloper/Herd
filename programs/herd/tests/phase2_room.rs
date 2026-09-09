@@ -84,6 +84,20 @@ fn ix_lock(host: &Pubkey) -> Instruction {
     }
 }
 
+fn ix_leave(host: &Pubkey, player: &Pubkey) -> Instruction {
+    let room = room_pda(host, ROOM_ID);
+    Instruction {
+        program_id: herd::ID,
+        accounts: herd::accounts::LeaveRoom {
+            player: *player,
+            room,
+            vault: vault_pda(&room),
+        }
+        .to_account_metas(None),
+        data: herd::instruction::LeaveRoom {}.data(),
+    }
+}
+
 fn read_room(svm: &LiteSVM, host: &Pubkey) -> Room {
     let acct = svm.get_account(&room_pda(host, ROOM_ID)).expect("room exists");
     Room::try_deserialize(&mut acct.data.as_slice()).expect("room deserialises")
@@ -230,6 +244,99 @@ fn the_table_votes_on_its_ending_and_locking_freezes_it() {
         assert_eq!(room.ending, expected, "votes {votes:?}");
         assert_eq!(room.phase, Phase::Playing);
     }
+}
+
+/// A stake must never be lost to nothing happening.
+///
+/// A room needs three people. A host who opens one, takes a friend's stake and
+/// then never finds a third player would otherwise have left both of them paid
+/// into a vault that no instruction could ever pay out.
+#[test]
+fn leaving_an_open_room_gives_the_stake_back() {
+    let (mut svm, host, players, _sessions) = seated(2);
+    let leaver = &players[1];
+
+    let before = svm.get_account(&leaver.pubkey()).unwrap().lamports;
+    let vault_before = svm
+        .get_account(&vault_pda(&room_pda(&host.pubkey(), ROOM_ID)))
+        .unwrap()
+        .lamports;
+
+    send(&mut svm, leaver, &[], &[ix_leave(&host.pubkey(), &leaver.pubkey())]).expect("leave");
+
+    let room = read_room(&svm, &host.pubkey());
+    assert_eq!(room.seat_count, 1, "the seat should be gone");
+    assert!(
+        !room.seats().iter().any(|s| s.wallet == leaver.pubkey()),
+        "the wallet should not still be seated",
+    );
+
+    let after = svm.get_account(&leaver.pubkey()).unwrap().lamports;
+    let vault_after = svm
+        .get_account(&vault_pda(&room_pda(&host.pubkey(), ROOM_ID)))
+        .unwrap()
+        .lamports;
+    assert_eq!(vault_before - vault_after, STAKE, "the vault should be lighter by one stake");
+    assert!(after > before, "the player should be better off than before leaving");
+}
+
+/// Seats close up behind whoever left, so the ones still there are intact.
+#[test]
+fn the_seats_left_behind_are_not_disturbed() {
+    let (mut svm, host, players, _sessions) = seated(3);
+    let stayed: Vec<Pubkey> = vec![players[0].pubkey(), players[2].pubkey()];
+
+    send(
+        &mut svm,
+        &players[1],
+        &[],
+        &[ix_leave(&host.pubkey(), &players[1].pubkey())],
+    )
+    .expect("leave");
+
+    let room = read_room(&svm, &host.pubkey());
+    let seated_now: Vec<Pubkey> = room.seats().iter().map(|s| s.wallet).collect();
+    assert_eq!(seated_now, stayed, "order should survive the gap closing");
+}
+
+/// Leaving is for a room that has not started. Once it locks the stake is in
+/// play, and walking out with it would be a way to quit a game you are losing
+/// and keep your money.
+#[test]
+fn you_cannot_leave_once_the_game_has_started() {
+    let (mut svm, host, players, _sessions) = seated(3);
+    send(&mut svm, &host, &[], &[ix_lock(&host.pubkey())]).expect("lock");
+
+    let err = send(
+        &mut svm,
+        &players[0],
+        &[],
+        &[ix_leave(&host.pubkey(), &players[0].pubkey())],
+    )
+    .expect_err("a locked room must refuse");
+    assert!(
+        format!("{err:?}").contains(&code(HerdError::RoomNotOpen)),
+        "expected RoomNotOpen, got {err:?}",
+    );
+}
+
+/// Somebody who never sat down cannot take a stake out of the vault.
+#[test]
+fn a_stranger_cannot_leave_a_room_they_never_joined() {
+    let (mut svm, host, _players, _sessions) = seated(3);
+    let stranger = funded(&mut svm);
+
+    let err = send(
+        &mut svm,
+        &stranger,
+        &[],
+        &[ix_leave(&host.pubkey(), &stranger.pubkey())],
+    )
+    .expect_err("a stranger must be refused");
+    assert!(
+        format!("{err:?}").contains(&code(HerdError::NotAPlayer)),
+        "expected NotAPlayer, got {err:?}",
+    );
 }
 
 #[test]

@@ -818,6 +818,82 @@
       ]
     },
     {
+      "name": "leave_room",
+      "docs": [
+        "Take your seat back and your stake with it. Base layer, open rooms only."
+      ],
+      "discriminator": [
+        249,
+        42,
+        239,
+        128,
+        192,
+        20,
+        114,
+        156
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.host",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          },
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "lock_room",
       "docs": [
         "Close the door and start round one. Base layer, host only."

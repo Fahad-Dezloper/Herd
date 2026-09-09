@@ -553,6 +553,20 @@ export default function App() {
       setAnswer("");
     });
 
+  /**
+   * Give the seat back before the game starts.
+   *
+   * A room needs three people, so without this a stake could be lost to nothing
+   * happening at all - two players waiting on a third who never arrives had
+   * paid into a vault with no way out of it.
+   */
+  const onLeave = () =>
+    run("Leaving", async () => {
+      const { host, roomId } = ref!;
+      await sendAsWallet([herd.leaveRoom(host, roomId, new PublicKey(wallet!.address))]);
+      onAgain();
+    });
+
   const onSettle = () =>
     run("Paying out", async () => {
       const { host, roomId } = ref!;
@@ -748,6 +762,7 @@ export default function App() {
             unseatedBots={unseatedBots}
             onAddBots={() => onAddBots(BOT_SEATS)}
             onStart={onStart}
+            onLeave={onLeave}
           />
         )}
 

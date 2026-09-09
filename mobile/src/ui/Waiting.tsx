@@ -17,6 +17,7 @@ export function Waiting({
   unseatedBots,
   onAddBots,
   onStart,
+  onLeave,
 }: {
   room: RoomState;
   code: string;
@@ -27,6 +28,8 @@ export function Waiting({
   unseatedBots: number;
   onAddBots(): void;
   onStart(): void;
+  /** Take the seat back and the stake with it. */
+  onLeave(): void;
 }) {
   const enough = room.seats.length >= 3;
 
@@ -75,6 +78,12 @@ export function Waiting({
       ) : (
         <Text style={[s.note, { marginTop: 18 }]}>Waiting for the host to start.</Text>
       )}
+
+      {/* Nothing has happened yet, so nothing is owed - the stake comes back
+          whole. Once the room locks it is in play and this goes away. */}
+      <View style={{ marginTop: 12 }}>
+        <Button ghost label="Leave and take my stake back" onPress={onLeave} disabled={busy} />
+      </View>
     </>
   );
 }

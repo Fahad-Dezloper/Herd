@@ -79,6 +79,11 @@ pub mod herd {
         room::handle_join(ctx, session, ending_vote)
     }
 
+    /// Take your seat back and your stake with it. Base layer, open rooms only.
+    pub fn leave_room(ctx: Context<LeaveRoom>) -> Result<()> {
+        room::handle_leave(ctx)
+    }
+
     /// Close the door and start round one. Base layer, host only.
     pub fn lock_room(ctx: Context<LockRoom>) -> Result<()> {
         room::handle_lock(ctx)

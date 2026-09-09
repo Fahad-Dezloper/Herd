@@ -230,6 +230,16 @@ if (finished.phase !== Phase.Finished) {
   say(
     `    the table voted ${Ending[onBase.ending]}; survivors on Solana: ${winners.length}`,
   );
+  // The byte the finished screen reads to tell a coin loss from being
+  // out-guessed by the room. If it decodes wrong, a losing finalist is shown
+  // the wrong story about how they went out.
+  const expectCoin = ENDING === Ending.Coin;
+  if (onBase.coinDecided === expectCoin) {
+    ok(`the room records how it ended (coinDecided ${onBase.coinDecided})`);
+  } else {
+    bad(`coinDecided is ${onBase.coinDecided}, expected ${expectCoin}`);
+  }
+
   if (winners.length === wanted) {
     ok(
       ENDING === Ending.Coin

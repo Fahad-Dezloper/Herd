@@ -138,7 +138,8 @@ export const s = StyleSheet.create({
 
   /* reveal */
   big: { color: colors.ink, fontSize: 30, fontWeight: "700", letterSpacing: -0.5 },
-  ruleLine: { color: colors.gold, fontSize: 15, fontWeight: "600" },
+  ruleLine: { color: colors.gold, fontSize: 18, fontWeight: "700" },
+  groupWord: { color: colors.good, fontSize: 20, fontWeight: "700" },
 
   /* misc */
   err: { color: "#f0b8a6", fontSize: 13, lineHeight: 19 },

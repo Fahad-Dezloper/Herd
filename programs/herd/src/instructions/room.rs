@@ -72,6 +72,9 @@ pub fn handle_create(
     room.awaiting_rule = false;
     room.seats = [Seat::empty(); MAX_PLAYERS];
     room.seat_count = 0;
+    room.last_round = 0;
+    room.last_words = [[0u8; MAX_ANSWER]; MAX_PLAYERS];
+    room.last_lengths = [0u8; MAX_PLAYERS];
     room.bump = ctx.bumps.room;
     room.vault_bump = ctx.bumps.vault;
     room.answers_bump = ctx.bumps.answers;

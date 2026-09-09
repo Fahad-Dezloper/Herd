@@ -287,6 +287,14 @@ pub fn handle_callback(ctx: Context<CallbackRound>, randomness: [u8; 32]) -> Res
     room.awaiting_rule = false;
 
     let answers = &mut ctx.accounts.answers;
+
+    // Publish the round's words before scoring it. The reason to hide them
+    // expires the instant the window closes, and the reveal is the part of the
+    // game people actually play for.
+    room.last_round = room.round;
+    room.last_words = answers.words;
+    room.last_lengths = answers.lengths;
+
     let culled = resolve_round(room, answers, rule);
     msg!(
         "herd: round {} scored {:?}, {} culled, {} left",
@@ -302,8 +310,14 @@ pub fn handle_callback(ctx: Context<CallbackRound>, randomness: [u8; 32]) -> Res
     }
 
     // Next round. Answers are cleared so a stale one cannot count twice.
+    //
+    // `rule` deliberately keeps the value that was just drawn rather than being
+    // reset. It is the most important thing that happened in the round, and a
+    // client polling a second later would otherwise find it already erased and
+    // have nothing to show. It says nothing about the next draw - each one is an
+    // independent request to the oracle - and `awaiting_rule` is what marks a
+    // round whose rule is not yet decided.
     room.round += 1;
-    room.rule = Rule::Undrawn;
     for seat in room.seats.iter_mut() {
         seat.has_answered = false;
     }
@@ -484,6 +498,9 @@ mod tests {
             awaiting_rule: false,
             seats,
             seat_count: said.len() as u8,
+            last_round: 0,
+            last_words: [[0u8; MAX_ANSWER]; MAX_PLAYERS],
+            last_lengths: [0u8; MAX_PLAYERS],
             bump: 255,
             vault_bump: 255,
             answers_bump: 255,

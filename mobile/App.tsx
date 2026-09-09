@@ -99,17 +99,26 @@ export default function App() {
   useEffect(() => {
     if (!room) return;
 
-    if (room.phase === Phase.Open) setScreen("waiting");
-    else if (room.phase === Phase.Finished || room.phase === Phase.Settled) setScreen("finished");
-    else if (room.phase === Phase.Playing) {
-      // A round resolves when the oracle answers. Show what happened once.
-      if (!room.awaitingRule && room.rule !== Rule.Undrawn && shown.current !== room.round) {
-        shown.current = room.round;
-        setScreen("reveal");
-      } else if (screen !== "reveal") {
-        setScreen("playing");
-      }
+    if (room.phase === Phase.Open) {
+      setScreen("waiting");
+      return;
     }
+
+    // A round is over when its result has been published, whether the game
+    // continues or ends there. Watching `rule` would not work: it is drawn and
+    // the next round starts in the same instruction, so a client polling a
+    // second later sees only the aftermath.
+    const resolved = room.lastRound > 0 && room.lastRound !== shown.current;
+    if (resolved) {
+      shown.current = room.lastRound;
+      setSealedWord(null);
+      setScreen("reveal");
+      return;
+    }
+
+    if (screen === "reveal") return;
+    if (room.phase === Phase.Finished || room.phase === Phase.Settled) setScreen("finished");
+    else setScreen("playing");
   }, [room]);
 
   // Close the round when the clock runs out. Anyone may do it, so the app does
@@ -462,9 +471,11 @@ export default function App() {
         {screen === "reveal" && room && (
           <Reveal
             room={room}
-            question={questionFor(shown.current)}
-            youAlive={!!mySeat?.alive}
-            onNext={() => setScreen(room.phase === Phase.Playing ? "playing" : "finished")}
+            question={questionFor(room.lastRound)}
+            you={wallet?.address}
+            onNext={() =>
+              setScreen(room.phase === Phase.Playing ? "playing" : "finished")
+            }
           />
         )}
 

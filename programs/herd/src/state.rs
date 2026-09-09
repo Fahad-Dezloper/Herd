@@ -100,6 +100,19 @@ pub struct Room {
     pub seats: [Seat; MAX_PLAYERS],
     pub seat_count: u8,
 
+    /// What everyone said in the round that just finished, and which round that
+    /// was.
+    ///
+    /// Published deliberately. Answers are secret while the window is open,
+    /// because seeing them would let you copy the crowd and there would be no
+    /// game - but the moment a round is scored that reason is gone, and seeing
+    /// who said what is the best part of it. So the resolved round's words are
+    /// copied out of the sealed account into this one, where anybody can read
+    /// them.
+    pub last_round: u16,
+    pub last_words: [[u8; MAX_ANSWER]; MAX_PLAYERS],
+    pub last_lengths: [u8; MAX_PLAYERS],
+
     pub bump: u8,
     pub vault_bump: u8,
     pub answers_bump: u8,
@@ -120,6 +133,10 @@ impl Room {
 
     pub fn pot(&self) -> u64 {
         self.stake.saturating_mul(self.seat_count as u64)
+    }
+
+    pub fn said_last(&self, seat: usize) -> &[u8] {
+        &self.last_words[seat][..self.last_lengths[seat] as usize]
     }
 }
 

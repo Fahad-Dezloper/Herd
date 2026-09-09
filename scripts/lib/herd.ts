@@ -38,6 +38,12 @@ export interface Seat {
   hasAnswered: boolean;
 }
 
+export interface Said {
+  wallet: PublicKey;
+  word: string;
+  alive: boolean;
+}
+
 export interface RoomState {
   host: PublicKey;
   roomId: bigint;
@@ -49,6 +55,9 @@ export interface RoomState {
   rule: Rule;
   awaitingRule: boolean;
   seats: Seat[];
+  /** What everyone said in the round that just finished. */
+  lastRound: number;
+  lastWords: string[];
   bump: number;
   vaultBump: number;
   answersBump: number;
@@ -211,6 +220,19 @@ export class Herd {
 
     const seatCount = data[at];
     at += 1;
+
+    const lastRound = view.getUint16(at, true);
+    at += 2;
+    const lastWords: string[] = [];
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      lastWords.push(new TextDecoder().decode(data.slice(at, at + MAX_ANSWER)));
+      at += MAX_ANSWER;
+    }
+    for (let i = 0; i < MAX_PLAYERS; i++) {
+      lastWords[i] = lastWords[i].slice(0, data[at + i]);
+    }
+    at += MAX_PLAYERS;
+
     const bump = data[at++];
     const vaultBump = data[at++];
     const answersBump = data[at++];
@@ -226,6 +248,8 @@ export class Herd {
       rule,
       awaitingRule,
       seats: seats.slice(0, seatCount),
+      lastRound,
+      lastWords: lastWords.slice(0, seatCount),
       bump,
       vaultBump,
       answersBump,

@@ -1501,6 +1501,44 @@
             "type": "u8"
           },
           {
+            "name": "last_round",
+            "docs": [
+              "What everyone said in the round that just finished, and which round that",
+              "was.",
+              "",
+              "Published deliberately. Answers are secret while the window is open,",
+              "because seeing them would let you copy the crowd and there would be no",
+              "game - but the moment a round is scored that reason is gone, and seeing",
+              "who said what is the best part of it. So the resolved round's words are",
+              "copied out of the sealed account into this one, where anybody can read",
+              "them."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "last_words",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    24
+                  ]
+                },
+                12
+              ]
+            }
+          },
+          {
+            "name": "last_lengths",
+            "type": {
+              "array": [
+                "u8",
+                12
+              ]
+            }
+          },
+          {
             "name": "bump",
             "type": "u8"
           },

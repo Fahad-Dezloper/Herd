@@ -71,6 +71,19 @@ export const s = StyleSheet.create({
   btnGhostText: { color: colors.ink, fontWeight: "600", fontSize: 14.5 },
   btnDisabled: { opacity: 0.4 },
 
+  optRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  opt: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.line,
+    borderRadius: 999,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+  },
+  optOn: { borderColor: colors.gold, backgroundColor: "#1c1810" },
+  optText: { color: colors.ink, fontSize: 15, fontWeight: "600" },
+  optTextOn: { color: colors.gold },
+
   walletRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,7 +1,7 @@
 /** A live round: the question, the clock, and one answer. */
 
 import { useEffect, useState } from "react";
-import { Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 
 import type { RoomState } from "../lib/herd";
 import { Seats } from "./Seats";
@@ -11,6 +11,7 @@ import { Button } from "./Button";
 export function Round({
   room,
   question,
+  options,
   pot,
   answer,
   sealed,
@@ -22,6 +23,8 @@ export function Round({
 }: {
   room: RoomState;
   question: string;
+  /** Words to tap for this round. Tapping one fills the box, it does not send. */
+  options: string[];
   pot: number;
   answer: string;
   sealed: string | null;
@@ -95,9 +98,33 @@ export function Round({
         </View>
       ) : (
         <View style={{ gap: 11 }}>
+          {options.length > 0 && (
+            <View style={s.optRow}>
+              {options.map((word) => {
+                const picked = answer.trim().toLowerCase() === word;
+                return (
+                  <Pressable
+                    key={word}
+                    style={({ pressed }) => [
+                      s.opt,
+                      picked && s.optOn,
+                      pressed && s.btnPressed,
+                    ]}
+                    onPress={() => onChange(picked ? "" : word)}
+                    disabled={busy}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: picked }}
+                  >
+                    <Text style={[s.optText, picked && s.optTextOn]}>{word}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
           <TextInput
             style={[s.input, s.inputBig]}
-            placeholder="type your answer"
+            placeholder="or type your own"
             placeholderTextColor="#5f6b7c"
             autoCapitalize="none"
             autoCorrect={false}
@@ -108,7 +135,10 @@ export function Round({
             returnKeyType="done"
           />
           <Button label="Lock it in" onPress={onSubmit} disabled={busy || !answer.trim()} />
-          <Text style={s.note}>No signature needed — your session key handles this one.</Text>
+          <Text style={s.note}>
+            Tap one or write your own — an answer nobody else picks is how you stray, and under
+            the wrong rule that is exactly what you want.
+          </Text>
         </View>
       )}
 

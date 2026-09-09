@@ -32,7 +32,7 @@ import { secureStore } from "./src/lib/secure";
 import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
 import { EndingPick, EndingTally } from "./src/ui/EndingPick";
 import { Finished } from "./src/ui/Finished";
-import { questionFor } from "./src/questions";
+import { optionsFor, questionFor } from "./src/questions";
 import { Seats, answered } from "./src/ui/Seats";
 import { Reveal } from "./src/ui/Reveal";
 import { Round } from "./src/ui/Round";
@@ -755,6 +755,7 @@ export default function App() {
           <Round
             room={room}
             question={questionFor(room.round)}
+            options={optionsFor(room.round)}
             pot={pot}
             answer={answer}
             sealed={sealedWord && mySeat && answered(mySeat, room.round) ? sealedWord : null}

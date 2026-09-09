@@ -23,7 +23,7 @@ export function Waiting({
   isHost: boolean;
   busy: boolean;
   botCount: number;
-  onAddBots(count: number): void;
+  onAddBots(): void;
   onStart(): void;
 }) {
   const enough = room.seats.length >= 3;
@@ -48,7 +48,7 @@ export function Waiting({
         <View style={{ marginTop: 18, gap: 10 }}>
           {!enough && botCount === 0 && (
             <>
-              <Button ghost label="Seat five bots" onPress={() => onAddBots(5)} disabled={busy} />
+              <Button ghost label="Seat five bots" onPress={onAddBots} disabled={busy} />
               <Text style={s.note}>
                 Real seats with real stakes, signing for themselves — the program cannot tell them
                 from anyone else. They see no more than you do: the answers are sealed to them too.

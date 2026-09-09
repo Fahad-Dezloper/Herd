@@ -49,9 +49,19 @@ const ROUND_SECONDS = 15;
  * that a game never stops to ask for a fingerprint, small enough to be nobody's
  * problem if the key is lost.
  */
-const SESSION_FUEL = 60_000_000n; // 0.06 SOL
+const SESSION_FUEL = 40_000_000n; // 0.04 SOL
+
+/** Stake plus enough for a bot to pay its own transaction fees. */
+const BOT_FUEL = 12_000_000n; // 0.012 SOL
+
+/** Roughly what opening a game costs, before anyone joins. */
+const HOST_COST = (bots: number) =>
+  STAKE + SESSION_FUEL + BOT_FUEL * BigInt(bots) + 25_000_000n; // + account rent
 
 type Screen = "connect" | "lobby" | "waiting" | "playing" | "reveal" | "finished";
+
+/** How many bots a solo host gets. Six players is a game; three is barely one. */
+const BOT_SEATS = 5;
 
 interface RoomRef {
   host: PublicKey;
@@ -238,11 +248,31 @@ export default function App() {
   const onCreate = () =>
     run("Opening a room", async () => {
       const host = new PublicKey(wallet!.address);
+
+      // Say what is wrong before the wallet does. A chain runs out of money with
+      // "custom program error: 0x1" attributed to whichever instruction happened
+      // to be short, which tells you nothing about what to do.
+      const have = BigInt(await lamportsOf(BASE_RPC, host));
+      const need = HOST_COST(BOT_SEATS);
+      if (have < need) {
+        throw new Error(
+          `Opening a game costs about ${(Number(need) / 1e9).toFixed(2)} SOL on devnet — ` +
+            `your stake, the bots' stakes, and rent for the accounts. ` +
+            `This wallet has ${(Number(have) / 1e9).toFixed(3)}.`,
+        );
+      }
+
       const roomId = BigInt(Date.now() % 1_000_000);
       const key = herd.room(host, roomId);
       const mine = await sessionFor(key.toBase58());
+      const crew = await botsFor(key.toBase58(), BOT_SEATS);
       setSession(mine);
+      setBots(crew);
 
+      // Everything the game will need, in the one transaction the host signs.
+      // The bots are funded here rather than later so seating them costs no
+      // further approval - and so a shortfall surfaces now, at the door, rather
+      // than three taps into setting a game up.
       await sendAsWallet([
         herd.createRoom(host, roomId, STAKE, ROUND_SECONDS, mine.publicKey),
         herd.joinRoom(host, roomId, host, mine.publicKey),
@@ -251,6 +281,13 @@ export default function App() {
           toPubkey: mine.publicKey,
           lamports: Number(SESSION_FUEL),
         }),
+        ...crew.map((bot) =>
+          SystemProgram.transfer({
+            fromPubkey: host,
+            toPubkey: bot.keypair.publicKey,
+            lamports: Number(BOT_FUEL),
+          }),
+        ),
       ]);
 
       setRef({ host, roomId });
@@ -287,26 +324,7 @@ export default function App() {
       const key = herd.room(host, roomId);
       const crew = await botsFor(key.toBase58(), count);
 
-      // Funded by the session key, not the wallet - no fingerprint for this.
-      const topUp = Number(STAKE) + 3_000_000;
-      const transfers = [];
-      for (const bot of crew) {
-        const has = await lamportsOf(BASE_RPC, bot.keypair.publicKey);
-        if (has < topUp) {
-          transfers.push(
-            SystemProgram.transfer({
-              fromPubkey: session!.publicKey,
-              toPubkey: bot.keypair.publicKey,
-              lamports: topUp - has,
-            }),
-          );
-        }
-      }
-      if (transfers.length > 0) {
-        await sendLocal(BASE_RPC, [session!], transfers);
-        await sleep(3000);
-      }
-
+      // Already funded when the room opened, so this needs no wallet at all.
       for (const bot of crew) {
         const taken = room?.seats.some(
           (seat) => seat.wallet.toBase58() === bot.keypair.publicKey.toBase58(),
@@ -488,7 +506,7 @@ export default function App() {
             isHost={wallet?.address === ref.host.toBase58()}
             busy={!!busy}
             botCount={bots.length}
-            onAddBots={onAddBots}
+            onAddBots={() => onAddBots(BOT_SEATS)}
             onStart={onStart}
           />
         )}

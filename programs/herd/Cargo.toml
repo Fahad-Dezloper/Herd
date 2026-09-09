@@ -1,0 +1,49 @@
+[package]
+name = "herd"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "herd"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+
+[dependencies]
+anchor-lang = "1.0.2"
+ephemeral-rollups-sdk = { version = "=0.16.2", features = ["anchor", "access-control", "vrf"] }
+solana-instructions-sysvar = "3.0.1"
+solana-pubkey = "3.0.0"
+solana-sha256-hasher = "3.1.0"
+
+[dev-dependencies]
+litesvm = { version = "0.10.0", features = ["precompiles"] }
+p256 = { version = "0.13", features = ["ecdsa"] }
+rand_core = "0.6"
+solana-message = "3.0.1"
+solana-transaction = "3.0.2"
+solana-signer = "3.0.0"
+solana-keypair = "3.0.1"
+ureq = { version = "3.4.1", features = ["json"] }
+serde_json = "1.0.151"
+bincode = "1"
+base64 = "0.23.1"
+bs58 = "0.5.1"
+solana-hash = "4.6.0"
+solana-account = "4.7.0"
+magicblock-delegation-program-api = { version = "3.1.0", default-features = false, features = ["instruction"] }
+
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

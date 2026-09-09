@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Herd — say what everyone else says</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="mock-note">mock — no wallet, no chain, every other player is simulated</div>
+
+  <main class="phone">
+
+    <!-- ------------------------------------------------------------ lobby -->
+    <section class="screen" data-screen="lobby">
+      <header class="brand">
+        <div class="mark"></div>
+        <div>
+          <h1>Herd</h1>
+          <p>say what everyone else says</p>
+        </div>
+      </header>
+
+      <div class="pitch">
+        <p>Everyone answers the same question <b>at the same time</b>, in secret.</p>
+        <p>Stray from the herd and you're out. Last one standing takes the pot.</p>
+      </div>
+
+      <div class="card room">
+        <div class="room-head">
+          <span class="room-name">Public room</span>
+          <span class="pill">5 waiting</span>
+        </div>
+        <div class="stake-row">
+          <span>Stake</span>
+          <b id="stake-label">0.05 SOL</b>
+        </div>
+        <div class="stake-row">
+          <span>Pot if 6 play</span>
+          <b class="gold" id="pot-preview">0.30 SOL</b>
+        </div>
+        <div class="avatars" id="lobby-avatars"></div>
+      </div>
+
+      <button class="btn primary" id="join">Join for 0.05 SOL</button>
+      <p class="foot">15 seconds a round · one stake, winner takes it</p>
+    </section>
+
+    <!-- --------------------------------------------------------- question -->
+    <section class="screen" data-screen="question" hidden>
+      <div class="round-bar">
+        <span id="round-label">Round 1</span>
+        <span class="alive" id="alive-label">6 left</span>
+        <span class="gold" id="pot-label">0.30 SOL</span>
+      </div>
+
+      <div class="timer">
+        <div class="timer-fill" id="timer-fill"></div>
+        <span class="timer-num" id="timer-num">15</span>
+      </div>
+
+      <h2 class="question" id="question-text"></h2>
+
+      <form id="answer-form" autocomplete="off">
+        <input id="answer-input" placeholder="type your answer" maxlength="24" autocomplete="off" spellcheck="false">
+        <button class="btn primary" type="submit" id="lock-btn">Lock it in</button>
+      </form>
+
+      <div class="locked-note" id="locked-note" hidden>
+        <div class="lock-icon">🔒</div>
+        <b id="locked-answer"></b>
+        <p>Sealed. Nobody can read it — not the other players, not the room, not us.</p>
+      </div>
+
+      <div class="out-note" id="out-note" hidden>
+        <b>You're out</b>
+        <p>Watching the rest play for the pot.</p>
+      </div>
+
+      <div class="players" id="question-players"></div>
+    </section>
+
+    <!-- ----------------------------------------------------------- reveal -->
+    <section class="screen" data-screen="reveal" hidden>
+      <div class="round-bar">
+        <span id="reveal-round">Round 1</span>
+        <span class="gold" id="reveal-pot">0.30 SOL</span>
+      </div>
+
+      <h2 class="question small" id="reveal-question"></h2>
+
+      <div class="groups" id="groups"></div>
+
+      <div class="verdict" id="verdict"></div>
+
+      <button class="btn primary" id="next-btn">Next round</button>
+    </section>
+
+    <!-- ------------------------------------------------------------ final -->
+    <section class="screen" data-screen="final" hidden>
+      <h2 class="final-title" id="final-title">That's the herd</h2>
+      <div class="final-you" id="final-you"></div>
+      <div class="table" id="final-table"></div>
+      <button class="btn primary" id="again">Play again</button>
+    </section>
+
+  </main>
+
+  <aside class="explainer">
+    <h3>What you're looking at</h3>
+    <ol>
+      <li><b>Everyone answers at once, in secret.</b> If answers were visible as they landed, you would just copy the crowd and the game would be pointless. This is the part that needs a private rollup.</li>
+      <li><b>Nothing to look up.</b> There is no correct answer, so an AI has no edge — which is what killed HQ Trivia, where bots took 9,000 of 13,000 perfect scores and payouts fell below a dollar.</li>
+      <li><b>The pot pays itself out.</b> One stake at the door, and the last players standing split it — no operator deciding whether you get your $11.30.</li>
+    </ol>
+    <p class="explainer-foot">All simulated here. Real version: answers live in a MagicBlock Private ER, stakes and payout settle on Solana.</p>
+  </aside>
+
+<script src="/app.js"></script>
+</body>
+</html>

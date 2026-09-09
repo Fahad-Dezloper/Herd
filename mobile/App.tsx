@@ -29,9 +29,9 @@ import { explainChainError } from "./src/lib/errors";
 import { connectWallet, explainWalletError, signTransaction, type Wallet } from "./src/lib/mwa";
 import { sessionFor } from "./src/lib/session";
 import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
-import { EndingPick } from "./src/ui/EndingPick";
+import { EndingPick, EndingTally } from "./src/ui/EndingPick";
 import { questionFor } from "./src/questions";
-import { answered } from "./src/ui/Seats";
+import { Seats, answered } from "./src/ui/Seats";
 import { Reveal } from "./src/ui/Reveal";
 import { Round } from "./src/ui/Round";
 import { Waiting } from "./src/ui/Waiting";
@@ -67,7 +67,17 @@ const BOT_FUEL = 12_000_000n; // 0.012 SOL
 const HOST_COST = (bots: number) =>
   STAKE + SESSION_FUEL + BOT_FUEL * BigInt(bots) + 25_000_000n; // + account rent
 
-type Screen = "connect" | "lobby" | "waiting" | "playing" | "reveal" | "finished";
+type Screen =
+  | "connect"
+  | "lobby"
+  /** Setting up a room you are about to open. */
+  | "opening"
+  /** Looking at a specific room before taking a seat in it. */
+  | "joining"
+  | "waiting"
+  | "playing"
+  | "reveal"
+  | "finished";
 
 /** How many bots a solo host gets. Six players is a game; three is barely one. */
 const BOT_SEATS = 5;
@@ -80,8 +90,12 @@ interface RoomRef {
 export default function App() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [screen, setScreen] = useState<Screen>("connect");
-  // Cast at the door and sent with whichever seat you take next, host or not.
+  // The tiebreak is a property of one room, not a setting you carry around, so
+  // it is asked once you are looking at the room it applies to.
   const [vote, setVote] = useState<Ending>(Ending.Split);
+  /** The room a join code pointed at, read before anyone commits a stake to it. */
+  const [preview, setPreview] = useState<RoomState | null>(null);
+  const [pending, setPending] = useState<{ host: PublicKey; roomId: bigint } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -308,11 +322,35 @@ export default function App() {
       setScreen("waiting");
     });
 
-  const onJoin = () =>
-    run("Taking a seat", async () => {
+  /**
+   * Look the room up before asking for a stake.
+   *
+   * A join code is opaque - it says nothing about how many people are in there,
+   * what it costs, or what the table has voted for. Reading the room first
+   * turns "paste this and hope" into a decision, and it is also the only honest
+   * moment to ask for a vote, because the vote belongs to that room.
+   */
+  const onFind = () =>
+    run("Finding the room", async () => {
       const [hostText, idText] = joinCode.trim().split(":");
       const host = new PublicKey(hostText);
       const roomId = BigInt(idText);
+
+      const data = await accountData(BASE_RPC, herd.room(host, roomId));
+      if (!data) throw new Error("No room with that code.");
+
+      const found = herd.decodeRoom(data);
+      if (found.phase !== Phase.Open) throw new Error("That room has already started.");
+
+      setPreview(found);
+      setPending({ host, roomId });
+      setVote(Ending.Split);
+      setScreen("joining");
+    });
+
+  const onJoin = () =>
+    run("Taking a seat", async () => {
+      const { host, roomId } = pending!;
       const key = herd.room(host, roomId);
 
       const mine = await sessionFor(key.toBase58());
@@ -507,10 +545,15 @@ export default function App() {
                 Open a room and share the code. Everyone stakes 0.01 SOL; the last one standing
                 takes the lot.
               </Text>
-              <Button label="Open a room" onPress={onCreate} disabled={!!busy} />
+              <Button
+                label="Open a room"
+                onPress={() => {
+                  setVote(Ending.Split);
+                  setScreen("opening");
+                }}
+                disabled={!!busy}
+              />
             </View>
-
-            <EndingPick value={vote} onChange={setVote} disabled={!!busy} />
 
             <Text style={s.section}>OR JOIN ONE</Text>
             <View style={s.card}>
@@ -523,7 +566,57 @@ export default function App() {
                 value={joinCode}
                 onChangeText={setJoinCode}
               />
-              <Button ghost label="Take a seat" onPress={onJoin} disabled={!!busy || !joinCode} />
+              <Button ghost label="Look at the room" onPress={onFind} disabled={!!busy || !joinCode} />
+            </View>
+          </>
+        )}
+
+        {screen === "opening" && (
+          <>
+            <Text style={s.section}>YOUR ROOM</Text>
+            <View style={s.card}>
+              <Text style={s.body}>
+                Twelve seats, 0.01 SOL each. You can seat bots once it is open, so you do not need
+                to find eleven people first.
+              </Text>
+            </View>
+
+            <EndingPick value={vote} onChange={setVote} disabled={!!busy} />
+
+            <View style={{ gap: 10 }}>
+              <Button label="Open it" onPress={onCreate} disabled={!!busy} />
+              <Button ghost label="Back" onPress={() => setScreen("lobby")} disabled={!!busy} />
+            </View>
+          </>
+        )}
+
+        {screen === "joining" && preview && (
+          <>
+            <Text style={s.section}>THIS ROOM</Text>
+            <View style={s.card}>
+              <View style={s.roundBar}>
+                <Text style={s.chip}>{preview.seats.length} seated</Text>
+                <Text style={s.pot}>
+                  {((Number(preview.stake) * preview.seats.length) / 1e9).toFixed(3)} SOL
+                </Text>
+              </View>
+              <Text style={s.body}>
+                Taking a seat stakes {(Number(preview.stake) / 1e9).toFixed(3)} SOL.
+              </Text>
+            </View>
+
+            <Text style={s.section}>WHO IS IN</Text>
+            <Seats room={preview} />
+
+            <View style={{ marginTop: 14 }}>
+              <EndingTally room={preview} />
+            </View>
+
+            <EndingPick value={vote} onChange={setVote} disabled={!!busy} />
+
+            <View style={{ gap: 10 }}>
+              <Button label="Take the seat" onPress={onJoin} disabled={!!busy} />
+              <Button ghost label="Back" onPress={() => setScreen("lobby")} disabled={!!busy} />
             </View>
           </>
         )}

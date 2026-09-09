@@ -10,7 +10,7 @@
 
 import React from "react";
 import { Pressable, Text, View } from "react-native";
-import { Ending } from "../lib/herd";
+import { Ending, type RoomState } from "../lib/herd";
 import { s } from "./styles";
 
 export function EndingPick({
@@ -77,5 +77,30 @@ function Option({
       <Text style={[s.pickTitle, picked && s.pickTitleOn]}>{title}</Text>
       <Text style={s.pickBlurb}>{blurb}</Text>
     </Pressable>
+  );
+}
+
+/**
+ * Where the table's vote stands.
+ *
+ * Shown while the door is still open, because a vote you cannot see the state
+ * of is not really a vote - somebody about to take the last seat should be able
+ * to tell whether they are the one who decides it.
+ */
+export function EndingTally({ room }: { room: RoomState }) {
+  const coins = room.seats.filter((seat) => seat.endingVote === Ending.Coin).length;
+  const splits = room.seats.length - coins;
+  const winning = coins > splits ? "a coin flip" : "a split";
+
+  return (
+    <View style={[s.card, { marginTop: 14 }]}>
+      <Text style={s.note}>THE VOTE SO FAR</Text>
+      <Text style={s.body}>
+        <Text style={s.leadStrong}>{winning}</Text>
+        {coins === splits
+          ? ` — the room is split ${coins}–${splits}, and a tie means you share.`
+          : ` — ${Math.max(coins, splits)} of ${room.seats.length} want it that way.`}
+      </Text>
+    </View>
   );
 }

@@ -8,6 +8,96 @@
   },
   "instructions": [
     {
+      "name": "callback_deal",
+      "docs": [
+        "The oracle's answer: shuffle the line and seat the first six."
+      ],
+      "discriminator": [
+        180,
+        17,
+        166,
+        178,
+        30,
+        59,
+        141,
+        223
+      ],
+      "accounts": [
+        {
+          "name": "vrf_program_identity",
+          "docs": [
+            "Scoped VRF identity PDA, bound to this program. Its presence as a signer proves",
+            "the callback was issued by the VRF program for this program."
+          ],
+          "signer": true
+        },
+        {
+          "name": "queue",
+          "writable": true
+        },
+        {
+          "name": "room",
+          "writable": true
+        },
+        {
+          "name": "queue_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "callback_round",
       "docs": [
         "The oracle's answer: draw the rule, group the answers, cull."
@@ -300,6 +390,165 @@
         {
           "name": "host_session",
           "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "deal",
+      "docs": [
+        "Ask the oracle to fill a room from the line."
+      ],
+      "discriminator": [
+        128,
+        0,
+        138,
+        208,
+        72,
+        249,
+        203,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue.stake",
+                "account": "Queue"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "queue_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "client_seed",
+          "type": "u8"
         }
       ]
     },
@@ -631,6 +880,93 @@
       ]
     },
     {
+      "name": "enter_queue",
+      "docs": [
+        "Pay a stake and wait to be put somewhere you did not choose."
+      ],
+      "discriminator": [
+        139,
+        116,
+        15,
+        125,
+        189,
+        53,
+        96,
+        0
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue.stake",
+                "account": "Queue"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "session",
+          "type": "pubkey"
+        },
+        {
+          "name": "ending_vote",
+          "type": {
+            "defined": {
+              "name": "Ending"
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "finish_room",
       "docs": [
         "Push the finished room back to Solana so the pot can be paid."
@@ -818,6 +1154,76 @@
       ]
     },
     {
+      "name": "leave_queue",
+      "docs": [
+        "Stop waiting, and take the stake back."
+      ],
+      "discriminator": [
+        95,
+        75,
+        87,
+        92,
+        172,
+        245,
+        65,
+        97
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue.stake",
+                "account": "Queue"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "leave_room",
       "docs": [
         "Take your seat back and your stake with it. Base layer, open rooms only."
@@ -946,6 +1352,217 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "open_public_room",
+      "docs": [
+        "Build a public table. Once, ever - dealt rooms are reused."
+      ],
+      "discriminator": [
+        104,
+        133,
+        91,
+        231,
+        233,
+        206,
+        87,
+        137
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue.stake",
+                "account": "Queue"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue"
+              },
+              {
+                "kind": "arg",
+                "path": "index"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "answers",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  115,
+                  119,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "open_queue",
+      "docs": [
+        "Open the line for a given stake. Once per price."
+      ],
+      "discriminator": [
+        120,
+        153,
+        89,
+        168,
+        242,
+        35,
+        131,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "stake"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Holds everybody's stake until they are dealt somewhere."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "queue"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "stake",
+          "type": "u64"
+        },
+        {
+          "name": "round_seconds",
+          "type": "u16"
+        }
+      ]
     },
     {
       "name": "process_undelegation",
@@ -1324,6 +1941,19 @@
       ]
     },
     {
+      "name": "Queue",
+      "discriminator": [
+        204,
+        167,
+        6,
+        247,
+        20,
+        33,
+        2,
+        188
+      ]
+    },
+    {
       "name": "Room",
       "discriminator": [
         156,
@@ -1450,6 +2080,36 @@
       "code": 6019,
       "name": "RoomLayoutDrift",
       "msg": "Room account does not match its own contents"
+    },
+    {
+      "code": 6020,
+      "name": "QueueFull",
+      "msg": "The queue is full"
+    },
+    {
+      "code": 6021,
+      "name": "AlreadyWaiting",
+      "msg": "You are already waiting"
+    },
+    {
+      "code": 6022,
+      "name": "NotWaiting",
+      "msg": "You are not in the queue"
+    },
+    {
+      "code": 6023,
+      "name": "DealInFlight",
+      "msg": "A deal is already out with the oracle"
+    },
+    {
+      "code": 6024,
+      "name": "NotEnoughWaiting",
+      "msg": "Not enough people are waiting yet"
+    },
+    {
+      "code": 6025,
+      "name": "NotAPublicRoom",
+      "msg": "That room is not a public one"
     }
   ],
   "types": [
@@ -1585,6 +2245,74 @@
       }
     },
     {
+      "name": "Queue",
+      "docs": [
+        "The line for public rooms.",
+        "",
+        "You pay to stand in it and the oracle decides where you end up. That is the",
+        "whole point: a room you cannot choose is a room you cannot fill with your",
+        "friends, which is what makes the simple rule safe to keep. Everything else",
+        "about a dealt room plays exactly like a private one."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "stake",
+            "docs": [
+              "What a seat costs here. One queue per price."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "round_seconds",
+            "type": "u16"
+          },
+          {
+            "name": "waiting",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Waiting"
+                  }
+                },
+                24
+              ]
+            }
+          },
+          {
+            "name": "count",
+            "type": "u8"
+          },
+          {
+            "name": "awaiting_deal",
+            "docs": [
+              "A deal has been asked of the oracle and not yet delivered. Blocks a",
+              "second one: two live deals over the same line would seat some people",
+              "twice and others never."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "dealing_into",
+            "docs": [
+              "Which public room the outstanding deal is for."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "Room",
       "type": {
         "kind": "struct",
@@ -1664,6 +2392,18 @@
                 "name": "Ending"
               }
             }
+          },
+          {
+            "name": "dealt",
+            "docs": [
+              "Seated by the oracle out of the public queue, rather than opened by a",
+              "person who shared a code.",
+              "",
+              "A dealt room has no host to run it - the seats were assigned, nobody",
+              "invited anybody - so the jobs a host normally does are open to any player",
+              "sitting in it. None of them can move money."
+            ],
+            "type": "bool"
           },
           {
             "name": "coin_decided",
@@ -1836,6 +2576,33 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Waiting",
+      "docs": [
+        "Somebody waiting to be dealt into a room."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "pubkey"
+          },
+          {
+            "name": "session",
+            "type": "pubkey"
+          },
+          {
+            "name": "ending_vote",
+            "type": {
+              "defined": {
+                "name": "Ending"
+              }
+            }
           }
         ]
       }

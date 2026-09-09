@@ -138,6 +138,14 @@ pub struct Room {
     /// see who they would be picking it against.
     pub ending: Ending,
 
+    /// Seated by the oracle out of the public queue, rather than opened by a
+    /// person who shared a code.
+    ///
+    /// A dealt room has no host to run it - the seats were assigned, nobody
+    /// invited anybody - so the jobs a host normally does are open to any player
+    /// sitting in it. None of them can move money.
+    pub dealt: bool,
+
     /// Whether the last two were separated by the coin rather than by the herd.
     ///
     /// Worth a byte. Without it a player who reached the final two and lost
@@ -236,5 +244,67 @@ impl Answers {
 
     pub fn clear(&mut self) {
         self.lengths = [0u8; MAX_PLAYERS];
+    }
+}
+
+/// How many seats a public room is dealt.
+///
+/// Smaller than a private room on purpose. The queue is what keeps friends
+/// apart, and it can only do that by having somewhere else to put them - six
+/// means a crowd of twelve becomes two rooms rather than one, and the chance
+/// that three particular people land together falls with every extra room.
+pub const PUBLIC_ROOM_SIZE: usize = 6;
+
+/// How many people can be waiting at once.
+pub const QUEUE_CAP: usize = 24;
+
+/// Somebody waiting to be dealt into a room.
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
+pub struct Waiting {
+    pub wallet: Pubkey,
+    pub session: Pubkey,
+    pub ending_vote: Ending,
+}
+
+impl Waiting {
+    pub fn empty() -> Self {
+        Self {
+            wallet: Pubkey::default(),
+            session: Pubkey::default(),
+            ending_vote: Ending::Split,
+        }
+    }
+}
+
+/// The line for public rooms.
+///
+/// You pay to stand in it and the oracle decides where you end up. That is the
+/// whole point: a room you cannot choose is a room you cannot fill with your
+/// friends, which is what makes the simple rule safe to keep. Everything else
+/// about a dealt room plays exactly like a private one.
+#[account]
+#[derive(InitSpace)]
+pub struct Queue {
+    /// What a seat costs here. One queue per price.
+    pub stake: u64,
+    pub round_seconds: u16,
+
+    pub waiting: [Waiting; QUEUE_CAP],
+    pub count: u8,
+
+    /// A deal has been asked of the oracle and not yet delivered. Blocks a
+    /// second one: two live deals over the same line would seat some people
+    /// twice and others never.
+    pub awaiting_deal: bool,
+    /// Which public room the outstanding deal is for.
+    pub dealing_into: u64,
+
+    pub bump: u8,
+    pub vault_bump: u8,
+}
+
+impl Queue {
+    pub fn waiting(&self) -> &[Waiting] {
+        &self.waiting[..self.count as usize]
     }
 }

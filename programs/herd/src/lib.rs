@@ -13,12 +13,14 @@
 //! chain the only alternative is commit-reveal: two transactions per player per
 //! round, and anyone who declines to reveal wrecks the round for everyone.
 //!
-//! **The rule is drawn after the answers are locked.** VRF decides whether the
-//! smallest groups are culled or the largest ones. This is the answer to the
-//! only serious attack on the game: three friends in a room agreeing on one word
-//! are always the largest group, and if the largest group always survived they
-//! would win every time, forever. When the rule is a coin flip drawn after they
-//! have committed, being a bloc is as likely to kill them as save them.
+//! **The oracle deals the rooms.** The rule itself is fixed and simple - the
+//! fewest people on a word strayed, and they go - which leaves one serious
+//! attack: three friends agreeing on a word beforehand are never the smallest
+//! group, so they would win every time, forever. The answer is not to complicate
+//! the rule but to take away the room. A public seat is bought by standing in a
+//! queue, and VRF decides who is dealt into which room, so friends cannot
+//! arrange to sit together. Private rooms still open by code, where playing with
+//! people you know is the point rather than the problem.
 //!
 //! **The money never leaves Solana.** Stakes sit in a vault PDA that is never
 //! delegated. The rollup decides who won; it cannot pay anybody.
@@ -37,6 +39,17 @@ declare_id!("BvKkFUEdiin8KcF6m9CBqYoN9FncGFFy4cxhe5QZSvWN");
 pub const ROOM_SEED: &[u8] = b"room";
 pub const VAULT_SEED: &[u8] = b"vault";
 pub const ANSWERS_SEED: &[u8] = b"answers";
+pub const QUEUE_SEED: &[u8] = b"queue";
+pub const QUEUE_VAULT_SEED: &[u8] = b"qvault";
+
+/// The only validator a public room may be handed to.
+///
+/// A private room's host picks, and the people who joined their code decided to
+/// trust them. A dealt room has no host, so anybody may hand it to a rollup -
+/// which would be an invitation to hand it to a rollup you run and read six
+/// strangers' sealed answers. Pinning it means the person who triggers the
+/// delegation is choosing nothing at all.
+pub const PUBLIC_VALIDATOR: Pubkey = pubkey!("MTEWGuqxUpYZGFJQcp8tLN7x5v9BSeoFHYWQQ3n3xzo");
 
 /// Lamports the room carries above its own rent exemption.
 ///
@@ -78,6 +91,44 @@ pub mod herd {
     pub fn join_room(ctx: Context<JoinRoom>, session: Pubkey, ending_vote: Ending) -> Result<()> {
         room::handle_join(ctx, session, ending_vote)
     }
+
+    /* ------------------------------------------------------- public rooms */
+
+    /// Open the line for a given stake. Once per price.
+    pub fn open_queue(ctx: Context<OpenQueue>, stake: u64, round_seconds: u16) -> Result<()> {
+        queue::handle_open_queue(ctx, stake, round_seconds)
+    }
+
+    /// Build a public table. Once, ever - dealt rooms are reused.
+    pub fn open_public_room(ctx: Context<OpenPublicRoom>, index: u64) -> Result<()> {
+        queue::handle_open_public_room(ctx, index)
+    }
+
+    /// Pay a stake and wait to be put somewhere you did not choose.
+    pub fn enter_queue(
+        ctx: Context<EnterQueue>,
+        session: Pubkey,
+        ending_vote: Ending,
+    ) -> Result<()> {
+        queue::handle_enter_queue(ctx, session, ending_vote)
+    }
+
+    /// Stop waiting, and take the stake back.
+    pub fn leave_queue(ctx: Context<LeaveQueue>) -> Result<()> {
+        queue::handle_leave_queue(ctx)
+    }
+
+    /// Ask the oracle to fill a room from the line.
+    pub fn deal(ctx: Context<Deal>, client_seed: u8) -> Result<()> {
+        queue::handle_deal(ctx, client_seed)
+    }
+
+    /// The oracle's answer: shuffle the line and seat the first six.
+    pub fn callback_deal(ctx: Context<CallbackDeal>, randomness: [u8; 32]) -> Result<()> {
+        queue::handle_callback_deal(ctx, randomness)
+    }
+
+    /* ------------------------------------------------------ private rooms */
 
     /// Take your seat back and your stake with it. Base layer, open rooms only.
     pub fn leave_room(ctx: Context<LeaveRoom>) -> Result<()> {

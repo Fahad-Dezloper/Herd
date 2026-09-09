@@ -349,8 +349,16 @@ pub fn handle_delegate(ctx: Context<DelegateRoom>, validator: Option<Pubkey>) ->
     const HOST: usize = 8;
     const HOST_SESSION: usize = HOST + 32;
     const ROOM_ID: usize = HOST_SESSION + 32;
+    const STAKE: usize = ROOM_ID + 8;
+    const ROUND_SECONDS: usize = STAKE + 8;
+    const PHASE: usize = ROUND_SECONDS + 2;
+    const ROUND: usize = PHASE + 1;
+    const ROUND_ENDS_AT: usize = ROUND + 2;
+    const OUTCOME: usize = ROUND_ENDS_AT + 8;
+    const ENDING: usize = OUTCOME + 1;
+    const DEALT: usize = ENDING + 1;
 
-    let (host, host_session, room_id) = {
+    let (host, host_session, room_id, dealt) = {
         let data = ctx.accounts.room.try_borrow_data()?;
         (
             Pubkey::try_from(&data[HOST..HOST + 32]).map_err(|_| error!(HerdError::NotAPlayer))?,
@@ -361,6 +369,7 @@ pub fn handle_delegate(ctx: Context<DelegateRoom>, validator: Option<Pubkey>) ->
                     .try_into()
                     .map_err(|_| error!(HerdError::NotAPlayer))?,
             ),
+            data[DEALT] == 1,
         )
     };
 
@@ -374,8 +383,18 @@ pub fn handle_delegate(ctx: Context<DelegateRoom>, validator: Option<Pubkey>) ->
     );
     require_keys_eq!(expected, room_key, HerdError::RoomLayoutDrift);
 
-    let who = ctx.accounts.authority.key();
-    require!(who == host || who == host_session, HerdError::NotTheHost);
+    if dealt {
+        // Nobody owns a public room, so anybody may hand it to the rollup - but
+        // only to the one rollup. Letting the caller name the validator would
+        // let them name their own and read six strangers' sealed answers.
+        require!(
+            validator == Some(crate::PUBLIC_VALIDATOR),
+            HerdError::NotTheHost
+        );
+    } else {
+        let who = ctx.accounts.authority.key();
+        require!(who == host || who == host_session, HerdError::NotTheHost);
+    }
     ctx.accounts.delegate_room(
         &ctx.accounts.authority,
         &[ROOM_SEED, host.as_ref(), &room_id.to_le_bytes()],
@@ -419,6 +438,7 @@ mod delegate_layout_tests {
             host,
             host_session,
             room_id,
+            dealt: true,
             stake: 50_000_000,
             round_seconds: 30,
             phase: Phase::Open,
@@ -452,6 +472,14 @@ mod delegate_layout_tests {
         const HOST: usize = 8;
         const HOST_SESSION: usize = HOST + 32;
         const ROOM_ID: usize = HOST_SESSION + 32;
+        const STAKE: usize = ROOM_ID + 8;
+        const ROUND_SECONDS: usize = STAKE + 8;
+        const PHASE: usize = ROUND_SECONDS + 2;
+        const ROUND: usize = PHASE + 1;
+        const ROUND_ENDS_AT: usize = ROUND + 2;
+        const OUTCOME: usize = ROUND_ENDS_AT + 8;
+        const ENDING: usize = OUTCOME + 1;
+        const DEALT: usize = ENDING + 1;
 
         assert_eq!(Pubkey::try_from(&data[HOST..HOST + 32]).unwrap(), host);
         assert_eq!(
@@ -462,5 +490,9 @@ mod delegate_layout_tests {
             u64::from_le_bytes(data[ROOM_ID..ROOM_ID + 8].try_into().unwrap()),
             room_id,
         );
+        // `dealt` decides whether a room may be handed to a rollup by anybody.
+        // Reading the wrong byte for it would either lock every public room out
+        // of the rollup or let a stranger delegate somebody's private game.
+        assert_eq!(data[DEALT] == 1, true, "the dealt flag is not at {DEALT}");
     }
 }

@@ -530,6 +530,7 @@ mod tests {
             round_ends_at: 0,
             outcome: Outcome::Pending,
             ending: Ending::Split,
+            dealt: false,
             coin_decided: false,
             awaiting_coin: false,
             seats,

@@ -14,6 +14,15 @@ import { Program, concat, optionPubkey, u64, u8 } from "./program";
 export const PERMISSION_PROGRAM = new PublicKey("ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1");
 export const EPHEMERAL_QUEUE = new PublicKey("5hBR571xnXppuCPveTrctfTU7tJLSN94nq7kv7FRK5Tc");
 
+/**
+ * The oracle queue on Solana itself.
+ *
+ * Rounds run inside the rollup and ask the delegated queue; dealing a room
+ * happens on the base layer, where the line and the empty rooms live, so it has
+ * to ask the base-layer one. Asking the wrong queue fails the constraint.
+ */
+export const BASE_QUEUE = new PublicKey("Cuj97ggrhhidhbu39TijNVqE74xvKJ69gDervRUXAxGh");
+
 export const MAX_PLAYERS = 12;
 export const MAX_ANSWER = 24;
 
@@ -71,6 +80,26 @@ export interface Said {
   alive: boolean;
 }
 
+/** How many can wait at once, and how many a dealt room seats. */
+export const QUEUE_CAP = 24;
+export const PUBLIC_ROOM_SIZE = 6;
+
+export interface WaitingState {
+  wallet: PublicKey;
+  session: PublicKey;
+  endingVote: Ending;
+}
+
+export interface QueueState {
+  stake: bigint;
+  roundSeconds: number;
+  waiting: WaitingState[];
+  count: number;
+  /** A deal is out with the oracle. */
+  awaitingDeal: boolean;
+  dealingInto: bigint;
+}
+
 export interface RoomState {
   host: PublicKey;
   hostSession: PublicKey;
@@ -83,6 +112,8 @@ export interface RoomState {
   outcome: Outcome;
   /** The table's vote on the tiebreak, tallied when the door closed. */
   ending: Ending;
+  /** Seated by the oracle from the public queue rather than opened by a person. */
+  dealt: boolean;
   /** Whether the last two were separated by the coin rather than by the herd. */
   coinDecided: boolean;
   /** A coin flip is out with the oracle and has not come back. */
@@ -180,6 +211,84 @@ export class Herd {
     );
   }
 
+  /* ------------------------------------------------------- public rooms */
+
+  queue(stake: bigint): PublicKey {
+    return this.program.pda([Buffer.from("queue"), Buffer.from(u64(stake))]);
+  }
+
+  queueVault(queue: PublicKey): PublicKey {
+    return this.program.pda([Buffer.from("qvault"), queue.toBuffer()]);
+  }
+
+  /** A public room is furniture: built once and dealt a new game each time. */
+  publicRoom(stake: bigint, index: bigint | number): PublicKey {
+    return this.program.pda([
+      Buffer.from("room"),
+      this.queue(stake).toBuffer(),
+      Buffer.from(u64(index)),
+    ]);
+  }
+
+  openQueue(payer: PublicKey, stake: bigint, roundSeconds: number) {
+    return this.program.build(
+      "open_queue",
+      { payer, queue: this.queue(stake), vault: this.queueVault(this.queue(stake)) },
+      concat(u64(stake), u16(roundSeconds)),
+    );
+  }
+
+  openPublicRoom(payer: PublicKey, stake: bigint, index: bigint | number) {
+    const queue = this.queue(stake);
+    const room = this.publicRoom(stake, index);
+    return this.program.build(
+      "open_public_room",
+      {
+        payer,
+        queue,
+        room,
+        vault: this.vault(room),
+        answers: this.answers(room),
+      },
+      u64(index),
+    );
+  }
+
+  enterQueue(player: PublicKey, stake: bigint, session: PublicKey, endingVote: Ending) {
+    const queue = this.queue(stake);
+    return this.program.build(
+      "enter_queue",
+      { player, queue, vault: this.queueVault(queue) },
+      concat(session.toBytes(), Uint8Array.from([endingVote])),
+    );
+  }
+
+  leaveQueue(player: PublicKey, stake: bigint) {
+    const queue = this.queue(stake);
+    return this.program.build("leave_queue", {
+      player,
+      queue,
+      vault: this.queueVault(queue),
+    });
+  }
+
+  deal(payer: PublicKey, stake: bigint, index: bigint | number, clientSeed: number) {
+    const queue = this.queue(stake);
+    const room = this.publicRoom(stake, index);
+    return this.program.build(
+      "deal",
+      {
+        payer,
+        queue,
+        room,
+        queue_vault: this.queueVault(queue),
+        room_vault: this.vault(room),
+        oracle_queue: BASE_QUEUE,
+      },
+      Uint8Array.from([clientSeed]),
+    );
+  }
+
   /** Take a seat back, and the stake with it. Only while the room is open. */
   leaveRoom(host: PublicKey, roomId: bigint | number, player: PublicKey) {
     return this.program.build("leave_room", this.named(host, roomId, { player }));
@@ -238,6 +347,43 @@ export class Herd {
 
   /* ------------------------------------------------------------- decoding */
 
+  decodeQueue(data: Uint8Array): QueueState {
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    let at = 8;
+
+    const stake = view.getBigUint64(at, true);
+    at += 8;
+    const roundSeconds = view.getUint16(at, true);
+    at += 2;
+
+    const waiting: WaitingState[] = [];
+    for (let i = 0; i < QUEUE_CAP; i++) {
+      const wallet = new PublicKey(data.slice(at, at + 32));
+      at += 32;
+      const session = new PublicKey(data.slice(at, at + 32));
+      at += 32;
+      const endingVote = data[at] as Ending;
+      at += 1;
+      waiting.push({ wallet, session, endingVote });
+    }
+
+    const count = data[at];
+    at += 1;
+    const awaitingDeal = data[at] === 1;
+    at += 1;
+    const dealingInto = view.getBigUint64(at, true);
+    at += 8;
+
+    return {
+      stake,
+      roundSeconds,
+      waiting: waiting.slice(0, count),
+      count,
+      awaitingDeal,
+      dealingInto,
+    };
+  }
+
   decodeRoom(data: Uint8Array): RoomState {
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     let at = 8;
@@ -265,6 +411,8 @@ export class Herd {
     const outcome = data[at] as Outcome;
     at += 1;
     const ending = data[at] as Ending;
+    at += 1;
+    const dealt = data[at] === 1;
     at += 1;
     const coinDecided = data[at] === 1;
     at += 1;
@@ -316,6 +464,7 @@ export class Herd {
       roundEndsAt,
       outcome,
       ending,
+      dealt,
       coinDecided,
       awaitingCoin,
       seats: seats.slice(0, seatCount),

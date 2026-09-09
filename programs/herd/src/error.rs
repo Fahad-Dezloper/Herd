@@ -45,4 +45,18 @@ pub enum HerdError {
     /// of it - so one of those two reads is looking at the wrong bytes.
     #[msg("Room account does not match its own contents")]
     RoomLayoutDrift,
+
+    /// Nobody else can wait: the line is full.
+    #[msg("The queue is full")]
+    QueueFull,
+    #[msg("You are already waiting")]
+    AlreadyWaiting,
+    #[msg("You are not in the queue")]
+    NotWaiting,
+    #[msg("A deal is already out with the oracle")]
+    DealInFlight,
+    #[msg("Not enough people are waiting yet")]
+    NotEnoughWaiting,
+    #[msg("That room is not a public one")]
+    NotAPublicRoom,
 }

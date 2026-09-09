@@ -46,6 +46,7 @@ export interface Said {
 
 export interface RoomState {
   host: PublicKey;
+  hostSession: PublicKey;
   roomId: bigint;
   stake: bigint;
   roundSeconds: number;
@@ -114,11 +115,17 @@ export class Herd {
 
   /* -------------------------------------------------------- instructions */
 
-  createRoom(host: PublicKey, roomId: bigint | number, stake: bigint, roundSeconds: number) {
+  createRoom(
+    host: PublicKey,
+    roomId: bigint | number,
+    stake: bigint,
+    roundSeconds: number,
+    hostSession: PublicKey,
+  ) {
     return this.program.build(
       "create_room",
       this.named(host, roomId),
-      concat(u64(roomId), u64(stake), u16(roundSeconds)),
+      concat(u64(roomId), u64(stake), u16(roundSeconds), hostSession.toBytes()),
     );
   }
 
@@ -130,14 +137,20 @@ export class Herd {
     );
   }
 
-  lockRoom(host: PublicKey, roomId: bigint | number) {
-    return this.program.build("lock_room", this.named(host, roomId));
+  /** `authority` is the host, or the host's session key. */
+  lockRoom(host: PublicKey, roomId: bigint | number, authority: PublicKey) {
+    return this.program.build("lock_room", this.named(host, roomId, { authority }));
   }
 
-  delegateRoom(host: PublicKey, roomId: bigint | number, validator: PublicKey | null) {
+  delegateRoom(
+    host: PublicKey,
+    roomId: bigint | number,
+    authority: PublicKey,
+    validator: PublicKey | null,
+  ) {
     return this.program.build(
       "delegate_room",
-      this.named(host, roomId),
+      this.named(host, roomId, { authority }),
       optionPubkey(validator),
     );
   }
@@ -188,6 +201,7 @@ export class Herd {
     };
 
     const host = key();
+    const hostSession = key();
     const roomId = view.getBigUint64(at, true);
     at += 8;
     const stake = view.getBigUint64(at, true);
@@ -239,6 +253,7 @@ export class Herd {
 
     return {
       host,
+      hostSession,
       roomId,
       stake,
       roundSeconds,

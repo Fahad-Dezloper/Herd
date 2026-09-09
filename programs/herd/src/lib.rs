@@ -62,8 +62,9 @@ pub mod herd {
         room_id: u64,
         stake: u64,
         round_seconds: u16,
+        host_session: Pubkey,
     ) -> Result<()> {
-        room::handle_create(ctx, room_id, stake, round_seconds)
+        room::handle_create(ctx, room_id, stake, round_seconds, host_session)
     }
 
     /// Take a seat and pay the stake. Base layer.

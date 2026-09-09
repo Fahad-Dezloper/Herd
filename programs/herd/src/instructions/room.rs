@@ -59,9 +59,11 @@ pub fn handle_create(
     room_id: u64,
     stake: u64,
     round_seconds: u16,
+    host_session: Pubkey,
 ) -> Result<()> {
     let room = &mut ctx.accounts.room;
     room.host = ctx.accounts.host.key();
+    room.host_session = host_session;
     room.room_id = room_id;
     room.stake = stake;
     room.round_seconds = round_seconds.max(5);
@@ -175,19 +177,25 @@ pub fn handle_join(ctx: Context<JoinRoom>, session: Pubkey) -> Result<()> {
 
 #[derive(Accounts)]
 pub struct LockRoom<'info> {
-    pub host: Signer<'info>,
+    /// The host, or the host's session key. Checked in the handler because
+    /// either is acceptable and `has_one` can only express one of them.
+    pub authority: Signer<'info>,
 
     #[account(
         mut,
         seeds = [ROOM_SEED, room.host.as_ref(), &room.room_id.to_le_bytes()],
-        bump = room.bump,
-        has_one = host
+        bump = room.bump
     )]
     pub room: Box<Account<'info, Room>>,
 }
 
 pub fn handle_lock(ctx: Context<LockRoom>) -> Result<()> {
     let room = &mut ctx.accounts.room;
+    let who = ctx.accounts.authority.key();
+    require!(
+        who == room.host || who == room.host_session,
+        HerdError::NotTheHost
+    );
     require!(room.phase == Phase::Open, HerdError::RoomNotOpen);
     require!(room.seat_count >= MIN_PLAYERS, HerdError::TooFewPlayers);
 
@@ -206,8 +214,10 @@ pub fn handle_lock(ctx: Context<LockRoom>) -> Result<()> {
 #[delegate]
 #[derive(Accounts)]
 pub struct DelegateRoom<'info> {
+    /// The host, or the host's session key. Pays the delegation rent, which is
+    /// why it must be writable.
     #[account(mut)]
-    pub host: Signer<'info>,
+    pub authority: Signer<'info>,
 
     /// CHECK: the delegation CPI reassigns the owner; seeds are re-derived and
     /// verified inside `delegate_account`.
@@ -232,9 +242,18 @@ pub fn handle_delegate(ctx: Context<DelegateRoom>, validator: Option<Pubkey>) ->
     );
     drop(data);
 
+    {
+        let data = ctx.accounts.room.try_borrow_data()?;
+        // host at 8, host_session at 40.
+        let host_session =
+            Pubkey::try_from(&data[40..72]).map_err(|_| error!(HerdError::NotTheHost))?;
+        let who = ctx.accounts.authority.key();
+        require!(who == host || who == host_session, HerdError::NotTheHost);
+    }
+
     let room_key = ctx.accounts.room.key();
     ctx.accounts.delegate_room(
-        &ctx.accounts.host,
+        &ctx.accounts.authority,
         &[ROOM_SEED, host.as_ref(), &room_id.to_le_bytes()],
         DelegateConfig {
             validator,
@@ -242,7 +261,7 @@ pub fn handle_delegate(ctx: Context<DelegateRoom>, validator: Option<Pubkey>) ->
         },
     )?;
     ctx.accounts.delegate_answers(
-        &ctx.accounts.host,
+        &ctx.accounts.authority,
         &[ANSWERS_SEED, room_key.as_ref()],
         DelegateConfig {
             validator,

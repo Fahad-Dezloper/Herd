@@ -38,6 +38,7 @@ fn ix_create(host: &Pubkey) -> Instruction {
             room_id: ROOM_ID,
             stake: STAKE,
             round_seconds: 15,
+            host_session: Keypair::new().pubkey(),
         }
         .data(),
     }
@@ -62,7 +63,7 @@ fn ix_lock(host: &Pubkey) -> Instruction {
     Instruction {
         program_id: herd::ID,
         accounts: herd::accounts::LockRoom {
-            host: *host,
+            authority: *host,
             room: room_pda(host, ROOM_ID),
         }
         .to_account_metas(None),
@@ -205,7 +206,60 @@ fn only_the_host_can_lock_a_room() {
     ix.accounts[0].pubkey = players[0].pubkey();
     let res = send(&mut svm, &players[0], &[], &[ix]);
 
-    assert!(res.is_err(), "a player must not be able to lock the room");
+    assert_program_error(&res, &code(HerdError::NotTheHost), "a player must not lock the room");
+}
+
+#[test]
+fn the_hosts_session_key_can_lock_the_room() {
+    // Locking moves no money and the host has already committed by paying to
+    // open the room, so making it need the wallet bought nothing and cost a
+    // fingerprint in the middle of setting up a game.
+    let (mut svm, host) = setup();
+    let session = Keypair::new();
+
+    let mut create = ix_create(&host.pubkey());
+    create.data = {
+        use anchor_lang::InstructionData;
+        herd::instruction::CreateRoom {
+            room_id: ROOM_ID,
+            stake: STAKE,
+            round_seconds: 15,
+            host_session: session.pubkey(),
+        }
+        .data()
+    };
+    send(&mut svm, &host, &[], &[create]).expect("create");
+
+    for _ in 0..3 {
+        let player = funded(&mut svm);
+        send(
+            &mut svm,
+            &player,
+            &[],
+            &[ix_join(&host.pubkey(), &player.pubkey(), Keypair::new().pubkey())],
+        )
+        .expect("join");
+    }
+
+    svm.airdrop(&session.pubkey(), LAMPORTS_PER_SOL).unwrap();
+    let mut lock = ix_lock(&host.pubkey());
+    lock.accounts[0].pubkey = session.pubkey();
+    send(&mut svm, &session, &[], &[lock]).expect("the session key may lock");
+
+    assert_eq!(read_room(&svm, &host.pubkey()).phase, Phase::Playing);
+}
+
+#[test]
+fn a_session_key_still_cannot_take_a_seat_for_someone_else() {
+    // The point of scoping it: it runs the room, it does not spend it.
+    let (svm, host, players, sessions) = seated(3);
+    let room = read_room(&svm, &host.pubkey());
+
+    for (i, seat) in room.seats().iter().enumerate() {
+        assert_eq!(seat.wallet, players[i].pubkey());
+        assert_eq!(seat.session, sessions[i].pubkey());
+    }
+    assert!(svm.get_account(&vault_pda(&room_pda(&host.pubkey(), ROOM_ID))).is_some());
 }
 
 #[test]

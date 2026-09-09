@@ -296,6 +296,10 @@
         {
           "name": "round_seconds",
           "type": "u16"
+        },
+        {
+          "name": "host_session",
+          "type": "pubkey"
         }
       ]
     },
@@ -320,7 +324,11 @@
       ],
       "accounts": [
         {
-          "name": "host",
+          "name": "authority",
+          "docs": [
+            "The host, or the host's session key. Pays the delegation rent, which is",
+            "why it must be writable."
+          ],
           "writable": true,
           "signer": true
         },
@@ -815,11 +823,12 @@
       ],
       "accounts": [
         {
-          "name": "host",
-          "signer": true,
-          "relations": [
-            "room"
-          ]
+          "name": "authority",
+          "docs": [
+            "The host, or the host's session key. Checked in the handler because",
+            "either is acceptable and `has_one` can only express one of them."
+          ],
+          "signer": true
         },
         {
           "name": "room",
@@ -1344,6 +1353,11 @@
       "code": 6017,
       "name": "Overflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6018,
+      "name": "NotTheHost",
+      "msg": "Only the host can do that"
     }
   ],
   "types": [
@@ -1432,6 +1446,20 @@
         "fields": [
           {
             "name": "host",
+            "type": "pubkey"
+          },
+          {
+            "name": "host_session",
+            "docs": [
+              "The host's session key, allowed to run the room but never to spend it.",
+              "",
+              "Locking the door and handing the room to a rollup are not money",
+              "decisions - they cannot move a lamport, and the host has already",
+              "committed by paying to open the room. Making them need the wallet meant",
+              "two more fingerprints in the middle of setting up a game, for no security",
+              "anyone was getting. The session key does them instead. It still cannot",
+              "take a seat, settle, or touch the vault."
+            ],
             "type": "pubkey"
           },
           {

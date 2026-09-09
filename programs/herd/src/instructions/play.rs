@@ -488,6 +488,7 @@ mod tests {
 
         let room = Room {
             host: Pubkey::new_unique(),
+            host_session: Pubkey::new_unique(),
             room_id: 1,
             stake: 50_000_000,
             round_seconds: 15,

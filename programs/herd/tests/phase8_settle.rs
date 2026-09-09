@@ -43,6 +43,7 @@ fn ix_create(host: &Pubkey) -> Instruction {
             room_id: ROOM_ID,
             stake: STAKE,
             round_seconds: 15,
+            host_session: Keypair::new().pubkey(),
         }
         .data(),
     }

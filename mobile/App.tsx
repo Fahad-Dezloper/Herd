@@ -41,6 +41,16 @@ const herd = new Herd(idl);
 const STAKE = 10_000_000n; // 0.01 SOL
 const ROUND_SECONDS = 15;
 
+/**
+ * What the session key gets at the door.
+ *
+ * It pays for everything after the first signature: delegation rent, closing
+ * each round, handing the room back, settling the pot, and funding bots. Enough
+ * that a game never stops to ask for a fingerprint, small enough to be nobody's
+ * problem if the key is lost.
+ */
+const SESSION_FUEL = 60_000_000n; // 0.06 SOL
+
 type Screen = "connect" | "lobby" | "waiting" | "playing" | "reveal" | "finished";
 
 interface RoomRef {
@@ -216,17 +226,32 @@ export default function App() {
       setScreen("lobby");
     });
 
+  /**
+   * The only signature the host gives all game.
+   *
+   * Opening the room, taking a seat and fuelling the session key go in one
+   * transaction, because they are one decision: I am starting a game and paying
+   * to be in it. Everything after this - locking, delegating, sealing, closing
+   * rounds, settling - is signed on the phone by the session key, which cannot
+   * move money.
+   */
   const onCreate = () =>
     run("Opening a room", async () => {
       const host = new PublicKey(wallet!.address);
       const roomId = BigInt(Date.now() % 1_000_000);
-      await sendAsWallet([herd.createRoom(host, roomId, STAKE, ROUND_SECONDS)]);
-      await sleep(2500);
-
       const key = herd.room(host, roomId);
       const mine = await sessionFor(key.toBase58());
       setSession(mine);
-      await sendAsWallet([herd.joinRoom(host, roomId, host, mine.publicKey)]);
+
+      await sendAsWallet([
+        herd.createRoom(host, roomId, STAKE, ROUND_SECONDS, mine.publicKey),
+        herd.joinRoom(host, roomId, host, mine.publicKey),
+        SystemProgram.transfer({
+          fromPubkey: host,
+          toPubkey: mine.publicKey,
+          lamports: Number(SESSION_FUEL),
+        }),
+      ]);
 
       setRef({ host, roomId });
       setScreen("waiting");
@@ -262,26 +287,23 @@ export default function App() {
       const key = herd.room(host, roomId);
       const crew = await botsFor(key.toBase58(), count);
 
-      // Stake plus enough for their own fees for the rest of the game.
-      const topUp = Number(STAKE) + 8_000_000;
-      const fund = new Transaction({
-        feePayer: new PublicKey(wallet!.address),
-        recentBlockhash: await latestBlockhash(BASE_RPC),
-      });
+      // Funded by the session key, not the wallet - no fingerprint for this.
+      const topUp = Number(STAKE) + 3_000_000;
+      const transfers = [];
       for (const bot of crew) {
         const has = await lamportsOf(BASE_RPC, bot.keypair.publicKey);
         if (has < topUp) {
-          fund.add(
+          transfers.push(
             SystemProgram.transfer({
-              fromPubkey: new PublicKey(wallet!.address),
+              fromPubkey: session!.publicKey,
               toPubkey: bot.keypair.publicKey,
               lamports: topUp - has,
             }),
           );
         }
       }
-      if (fund.instructions.length > 0) {
-        await submit(BASE_RPC, await signTransaction(wallet!.authToken, fund, setWallet));
+      if (transfers.length > 0) {
+        await sendLocal(BASE_RPC, [session!], transfers);
         await sleep(3000);
       }
 
@@ -303,15 +325,25 @@ export default function App() {
       await refresh();
     });
 
-  /** Lock, delegate, seal. Three steps, because each has to land before the next. */
+  /**
+   * Lock, delegate, seal - and no fingerprint for any of it.
+   *
+   * Three transactions rather than one because each has to land before the next
+   * makes sense: delegation reassigns the room's owner, and sealing happens
+   * inside the rollup it has just arrived in.
+   */
   const onStart = () =>
     run("Locking the room", async () => {
       const { host, roomId } = ref!;
-      await sendAsWallet([herd.lockRoom(host, roomId)]);
+      await sendLocal(BASE_RPC, [session!], [herd.lockRoom(host, roomId, session!.publicKey)]);
       await sleep(2500);
 
       setBusy("Handing it to the rollup");
-      await sendAsWallet([herd.delegateRoom(host, roomId, TEE_VALIDATOR)]);
+      await sendLocal(
+        BASE_RPC,
+        [session!],
+        [herd.delegateRoom(host, roomId, session!.publicKey, TEE_VALIDATOR)],
+      );
       await sleep(4000);
 
       setBusy("Sealing the answers");
@@ -365,8 +397,15 @@ export default function App() {
 
       const data = await accountData(BASE_RPC, herd.room(host, roomId));
       const onBase = herd.decodeRoom(data!);
+      // Settling is not a money decision for whoever calls it: it pays the
+      // survivors and nobody else, whoever asks. So the session key does it and
+      // the winner is not asked to sign for their own winnings.
       const winners = onBase.seats.filter((x) => x.alive).map((x) => x.wallet);
-      await sendAsWallet([herd.settle(host, roomId, new PublicKey(wallet!.address), winners)]);
+      await sendLocal(
+        BASE_RPC,
+        [session!],
+        [herd.settle(host, roomId, session!.publicKey, winners)],
+      );
       await refresh();
     });
 

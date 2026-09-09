@@ -38,4 +38,6 @@ pub enum HerdError {
     WrongWinners,
     #[msg("Arithmetic overflow")]
     Overflow,
+    #[msg("Only the host can do that")]
+    NotTheHost,
 }

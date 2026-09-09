@@ -84,6 +84,17 @@ pub enum Rule {
 #[derive(InitSpace)]
 pub struct Room {
     pub host: Pubkey,
+
+    /// The host's session key, allowed to run the room but never to spend it.
+    ///
+    /// Locking the door and handing the room to a rollup are not money
+    /// decisions - they cannot move a lamport, and the host has already
+    /// committed by paying to open the room. Making them need the wallet meant
+    /// two more fingerprints in the middle of setting up a game, for no security
+    /// anyone was getting. The session key does them instead. It still cannot
+    /// take a seat, settle, or touch the vault.
+    pub host_session: Pubkey,
+
     pub room_id: u64,
     /// Per player, paid once at the door. The pot never grows after that.
     pub stake: u64,

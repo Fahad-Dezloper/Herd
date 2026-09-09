@@ -431,6 +431,16 @@ export default function App() {
 
   const mySeat = room?.seats.find((x) => x.session.toBase58() === session?.publicKey.toBase58());
 
+  // Bots that exist and are funded but have not taken a seat yet. Counting the
+  // ones that exist would hide the button the moment a room is opened, since
+  // they are created and funded then.
+  const unseatedBots = bots.filter(
+    (bot) =>
+      !room?.seats.some(
+        (seat) => seat.wallet.toBase58() === bot.keypair.publicKey.toBase58(),
+      ),
+  ).length;
+
   return (
     <KeyboardAvoidingView
       style={s.root}
@@ -505,7 +515,7 @@ export default function App() {
             pot={pot}
             isHost={wallet?.address === ref.host.toBase58()}
             busy={!!busy}
-            botCount={bots.length}
+            unseatedBots={unseatedBots}
             onAddBots={() => onAddBots(BOT_SEATS)}
             onStart={onStart}
           />

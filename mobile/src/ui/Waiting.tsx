@@ -13,7 +13,7 @@ export function Waiting({
   pot,
   isHost,
   busy,
-  botCount,
+  unseatedBots,
   onAddBots,
   onStart,
 }: {
@@ -22,7 +22,8 @@ export function Waiting({
   pot: number;
   isHost: boolean;
   busy: boolean;
-  botCount: number;
+  /** Funded but not yet seated. */
+  unseatedBots: number;
   onAddBots(): void;
   onStart(): void;
 }) {
@@ -46,9 +47,14 @@ export function Waiting({
 
       {isHost ? (
         <View style={{ marginTop: 18, gap: 10 }}>
-          {!enough && botCount === 0 && (
+          {unseatedBots > 0 && (
             <>
-              <Button ghost label="Seat five bots" onPress={onAddBots} disabled={busy} />
+              <Button
+                ghost
+                label={`Seat ${unseatedBots} bots`}
+                onPress={onAddBots}
+                disabled={busy}
+              />
               <Text style={s.note}>
                 Real seats with real stakes, signing for themselves — the program cannot tell them
                 from anyone else. They see no more than you do: the answers are sealed to them too.

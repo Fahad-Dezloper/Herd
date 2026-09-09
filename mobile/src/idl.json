@@ -1,0 +1,1614 @@
+{
+  "address": "BvKkFUEdiin8KcF6m9CBqYoN9FncGFFy4cxhe5QZSvWN",
+  "metadata": {
+    "name": "herd",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "callback_round",
+      "docs": [
+        "The oracle's answer: draw the rule, group the answers, cull."
+      ],
+      "discriminator": [
+        240,
+        175,
+        109,
+        10,
+        45,
+        172,
+        226,
+        205
+      ],
+      "accounts": [
+        {
+          "name": "vrf_program_identity",
+          "docs": [
+            "Scoped VRF identity PDA, bound to this program. Its presence as a signer proves",
+            "the callback was issued by the VRF program for this program."
+          ],
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "relations": [
+            "answers"
+          ]
+        },
+        {
+          "name": "answers",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "randomness",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "close_round",
+      "docs": [
+        "Close the round and ask the oracle which way it is scored.",
+        "",
+        "Permissionless once the clock runs out, so a room cannot be held open by",
+        "a player who benefits from waiting."
+      ],
+      "discriminator": [
+        149,
+        14,
+        81,
+        88,
+        230,
+        226,
+        234,
+        37
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "Anyone may close a round once the clock has run out. Leaving it to the",
+            "players would let whoever benefits from waiting simply not act."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.host",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          },
+          "relations": [
+            "answers"
+          ]
+        },
+        {
+          "name": "answers",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  115,
+                  119,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "oracle_queue",
+          "writable": true
+        },
+        {
+          "name": "program_identity",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  105,
+                  100,
+                  101,
+                  110,
+                  116,
+                  105,
+                  116,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "vrf_program",
+          "address": "Vrf1RNUjXmQGjmQrQLvJHs9SNkvDJEsRVFPkfSQUwGz"
+        },
+        {
+          "name": "slot_hashes",
+          "address": "SysvarS1otHashes111111111111111111111111111"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "client_seed",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "create_room",
+      "docs": [
+        "Open a room. Base layer."
+      ],
+      "discriminator": [
+        130,
+        166,
+        32,
+        2,
+        247,
+        120,
+        178,
+        53
+      ],
+      "accounts": [
+        {
+          "name": "host",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "host"
+              },
+              {
+                "kind": "arg",
+                "path": "room_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "docs": [
+            "Holds the stakes, and is never delegated to a rollup."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "answers",
+          "docs": [
+            "The sealed half. Delegated with the room, then made unreadable."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  115,
+                  119,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "room_id",
+          "type": "u64"
+        },
+        {
+          "name": "stake",
+          "type": "u64"
+        },
+        {
+          "name": "round_seconds",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "delegate_room",
+      "docs": [
+        "Hand the room and its answers to a rollup. Base layer.",
+        "",
+        "`validator` pins which one. Passing the TEE identity is what makes the",
+        "answers secret; on a plain rollup the room is fast but readable, which",
+        "defeats the entire point of moving it."
+      ],
+      "discriminator": [
+        39,
+        6,
+        122,
+        70,
+        65,
+        76,
+        166,
+        26
+      ],
+      "accounts": [
+        {
+          "name": "host",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buffer_room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                162,
+                61,
+                217,
+                19,
+                116,
+                249,
+                188,
+                3,
+                221,
+                198,
+                46,
+                141,
+                222,
+                162,
+                200,
+                138,
+                226,
+                25,
+                189,
+                224,
+                222,
+                149,
+                209,
+                5,
+                179,
+                107,
+                167,
+                173,
+                128,
+                198,
+                95,
+                227
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "room",
+          "docs": [
+            "verified inside `delegate_account`."
+          ],
+          "writable": true
+        },
+        {
+          "name": "buffer_answers",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "answers"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                162,
+                61,
+                217,
+                19,
+                116,
+                249,
+                188,
+                3,
+                221,
+                198,
+                46,
+                141,
+                222,
+                162,
+                200,
+                138,
+                226,
+                25,
+                189,
+                224,
+                222,
+                149,
+                209,
+                5,
+                179,
+                107,
+                167,
+                173,
+                128,
+                198,
+                95,
+                227
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_answers",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "answers"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_answers",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "answers"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "answers",
+          "docs": [
+            "whose answers are still on Solana would be readable by anyone."
+          ],
+          "writable": true
+        },
+        {
+          "name": "owner_program",
+          "address": "BvKkFUEdiin8KcF6m9CBqYoN9FncGFFy4cxhe5QZSvWN"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "validator",
+          "type": {
+            "option": "pubkey"
+          }
+        }
+      ]
+    },
+    {
+      "name": "finish_room",
+      "docs": [
+        "Push the finished room back to Solana so the pot can be paid."
+      ],
+      "discriminator": [
+        121,
+        132,
+        212,
+        173,
+        93,
+        188,
+        125,
+        20
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.host",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          },
+          "relations": [
+            "answers"
+          ]
+        },
+        {
+          "name": "answers",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  115,
+                  119,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "join_room",
+      "docs": [
+        "Take a seat and pay the stake. Base layer.",
+        "",
+        "`session` is a throwaway key the app holds. It signs answers inside the",
+        "rollup so a fifteen-second round does not need a fingerprint, and it can",
+        "do nothing else."
+      ],
+      "discriminator": [
+        95,
+        232,
+        188,
+        81,
+        124,
+        130,
+        78,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.host",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          },
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "session",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "lock_room",
+      "docs": [
+        "Close the door and start round one. Base layer, host only."
+      ],
+      "discriminator": [
+        97,
+        147,
+        184,
+        7,
+        215,
+        44,
+        200,
+        216
+      ],
+      "accounts": [
+        {
+          "name": "host",
+          "signer": true,
+          "relations": [
+            "room"
+          ]
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.host",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  110,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_account"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                181,
+                183,
+                0,
+                225,
+                242,
+                87,
+                58,
+                192,
+                204,
+                6,
+                34,
+                1,
+                52,
+                74,
+                207,
+                151,
+                184,
+                53,
+                6,
+                235,
+                140,
+                229,
+                25,
+                152,
+                204,
+                98,
+                126,
+                24,
+                147,
+                128,
+                167,
+                62
+              ]
+            }
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "seal_room",
+      "docs": [
+        "Seal the room so nobody can read the answers. Runs inside the rollup."
+      ],
+      "discriminator": [
+        17,
+        127,
+        25,
+        127,
+        127,
+        189,
+        44,
+        185
+      ],
+      "accounts": [
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.host",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          },
+          "relations": [
+            "answers"
+          ]
+        },
+        {
+          "name": "answers",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  115,
+                  119,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        },
+        {
+          "name": "permission",
+          "writable": true
+        },
+        {
+          "name": "ephemeral_vault",
+          "writable": true,
+          "address": "MagicVau1t999999999999999999999999999999999"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "permission_program",
+          "address": "ACLseoPoyC3cBqoUtkbjZ4aDrkurZW86v19pXz2XQnp1"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "settle",
+      "docs": [
+        "Pay the survivors. Base layer."
+      ],
+      "discriminator": [
+        175,
+        42,
+        185,
+        87,
+        144,
+        131,
+        102,
+        212
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone may trigger the payout. It pays the survivors and nobody else,",
+            "whoever asks, so there is no reason to gate it - and gating it would let",
+            "a sore loser refuse to pay by doing nothing."
+          ],
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.host",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          },
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "submit_answer",
+      "docs": [
+        "Lock in an answer. Runs inside the rollup, signed by the session key."
+      ],
+      "discriminator": [
+        221,
+        73,
+        184,
+        157,
+        1,
+        150,
+        231,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "session",
+          "docs": [
+            "The throwaway key registered at join. It signs answers and nothing else -",
+            "it cannot join, cannot settle, cannot touch the vault."
+          ],
+          "signer": true
+        },
+        {
+          "name": "room",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room.host",
+                "account": "Room"
+              },
+              {
+                "kind": "account",
+                "path": "room.room_id",
+                "account": "Room"
+              }
+            ]
+          },
+          "relations": [
+            "answers"
+          ]
+        },
+        {
+          "name": "answers",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  110,
+                  115,
+                  119,
+                  101,
+                  114,
+                  115
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "answer",
+          "type": "bytes"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Answers",
+      "discriminator": [
+        240,
+        92,
+        254,
+        206,
+        55,
+        184,
+        186,
+        72
+      ]
+    },
+    {
+      "name": "Room",
+      "discriminator": [
+        156,
+        199,
+        67,
+        27,
+        222,
+        23,
+        185,
+        94
+      ]
+    },
+    {
+      "name": "Vault",
+      "discriminator": [
+        211,
+        8,
+        232,
+        43,
+        2,
+        152,
+        117,
+        119
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "RoomNotOpen",
+      "msg": "This room is not taking players"
+    },
+    {
+      "code": 6001,
+      "name": "RoomFull",
+      "msg": "This room is full"
+    },
+    {
+      "code": 6002,
+      "name": "AlreadySeated",
+      "msg": "You are already in this room"
+    },
+    {
+      "code": 6003,
+      "name": "TooFewPlayers",
+      "msg": "A room needs at least three players"
+    },
+    {
+      "code": 6004,
+      "name": "NotPlaying",
+      "msg": "The game is not running"
+    },
+    {
+      "code": 6005,
+      "name": "NotAPlayer",
+      "msg": "That session key is not in this room"
+    },
+    {
+      "code": 6006,
+      "name": "Eliminated",
+      "msg": "You are out"
+    },
+    {
+      "code": 6007,
+      "name": "AlreadyAnswered",
+      "msg": "You have already answered this round"
+    },
+    {
+      "code": 6008,
+      "name": "EmptyAnswer",
+      "msg": "An answer cannot be empty"
+    },
+    {
+      "code": 6009,
+      "name": "AnswerTooLong",
+      "msg": "That answer is too long"
+    },
+    {
+      "code": 6010,
+      "name": "RoundStillOpen",
+      "msg": "The round is still open"
+    },
+    {
+      "code": 6011,
+      "name": "RoundClosed",
+      "msg": "The round is closed"
+    },
+    {
+      "code": 6012,
+      "name": "RuleAlreadyRequested",
+      "msg": "The rule for this round has already been requested"
+    },
+    {
+      "code": 6013,
+      "name": "RuleNotDrawn",
+      "msg": "The rule for this round has not been drawn"
+    },
+    {
+      "code": 6014,
+      "name": "NotFinished",
+      "msg": "The game is not over"
+    },
+    {
+      "code": 6015,
+      "name": "AlreadySettled",
+      "msg": "This room has already paid out"
+    },
+    {
+      "code": 6016,
+      "name": "WrongWinners",
+      "msg": "The winners passed do not match the survivors"
+    },
+    {
+      "code": 6017,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "Answers",
+      "docs": [
+        "What everyone said this round. Sealed, and delegated alongside the room.",
+        "",
+        "Split from `Room` for one reason: a sealed account is invisible over RPC to",
+        "everybody, which is exactly right for answers and useless for everything",
+        "else. Players still need to see the round number, the clock and who is left,",
+        "so the public half of the game stays in `Room` and only the words move here.",
+        "",
+        "The program running inside the rollup reads this normally - sealing gates",
+        "RPC, not execution, which was worth confirming before relying on it."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "room",
+            "type": "pubkey"
+          },
+          {
+            "name": "round",
+            "docs": [
+              "The round these words belong to. Cleared between rounds so a stale",
+              "answer cannot be counted twice."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "words",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    24
+                  ]
+                },
+                12
+              ]
+            }
+          },
+          {
+            "name": "lengths",
+            "type": {
+              "array": [
+                "u8",
+                12
+              ]
+            }
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Phase",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Open"
+          },
+          {
+            "name": "Playing"
+          },
+          {
+            "name": "Finished"
+          },
+          {
+            "name": "Settled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Room",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "host",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_id",
+            "type": "u64"
+          },
+          {
+            "name": "stake",
+            "docs": [
+              "Per player, paid once at the door. The pot never grows after that."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "round_seconds",
+            "type": "u16"
+          },
+          {
+            "name": "phase",
+            "type": {
+              "defined": {
+                "name": "Phase"
+              }
+            }
+          },
+          {
+            "name": "round",
+            "type": "u16"
+          },
+          {
+            "name": "round_ends_at",
+            "docs": [
+              "Unix time after which the round can be closed by anyone."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "rule",
+            "type": {
+              "defined": {
+                "name": "Rule"
+              }
+            }
+          },
+          {
+            "name": "awaiting_rule",
+            "docs": [
+              "A VRF request is outstanding. Blocks a second request for the same round."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "seats",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "Seat"
+                  }
+                },
+                12
+              ]
+            }
+          },
+          {
+            "name": "seat_count",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_bump",
+            "type": "u8"
+          },
+          {
+            "name": "answers_bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Rule",
+      "docs": [
+        "Which way this round is scored.",
+        "",
+        "Drawn by VRF *after* every answer is sealed, which is the entire defence",
+        "against collusion: a bloc that agrees on one answer is the largest group,",
+        "and half the time being the largest group is what kills you."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Undrawn"
+          },
+          {
+            "name": "MajoritySurvives"
+          },
+          {
+            "name": "MinoritySurvives"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Seat",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "docs": [
+              "Pays the stake and receives the payout."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "session",
+            "docs": [
+              "Signs answers inside the rollup so a 15-second round does not need a",
+              "fingerprint. It can do nothing else - see `submit_answer`."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "alive",
+            "type": "bool"
+          },
+          {
+            "name": "answered_round",
+            "docs": [
+              "The round this seat last answered in.",
+              "",
+              "Public on purpose. Seeing that someone has answered is most of the",
+              "tension in a fifteen-second round; seeing *what* they answered would end",
+              "the game. The text lives in `Answers`, which nobody can read."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "has_answered",
+            "docs": [
+              "Whether `answered_round` refers to a real answer rather than seat zero",
+              "never having played."
+            ],
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Vault",
+      "docs": [
+        "Holds the stakes. Never delegated to a rollup.",
+        "",
+        "That is not a detail, it is the security argument. The room goes to a rollup",
+        "so answers can be sealed and rounds can be fast; the money stays on Solana.",
+        "A rollup that misbehaves can decide the game wrongly, and still cannot move a",
+        "lamport - payouts happen here, from state the rollup has committed back and",
+        "this program has checked."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "room",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

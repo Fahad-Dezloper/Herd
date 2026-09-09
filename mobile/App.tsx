@@ -1,0 +1,457 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
+
+import {
+  BASE_RPC,
+  TEE_VALIDATOR,
+  accountData,
+  authenticate,
+  delegationOf,
+  lamportsOf,
+  latestBlockhash,
+  sendLocal,
+  sleep,
+  submit,
+} from "./src/lib/chain";
+import { Herd, Phase, Rule, type RoomState } from "./src/lib/herd";
+import { connectWallet, explainWalletError, signTransaction, type Wallet } from "./src/lib/mwa";
+import { sessionFor } from "./src/lib/session";
+import { questionFor } from "./src/questions";
+import { answered } from "./src/ui/Seats";
+import { Reveal } from "./src/ui/Reveal";
+import { Round } from "./src/ui/Round";
+import { Waiting } from "./src/ui/Waiting";
+import { s } from "./src/ui/styles";
+import idl from "./src/idl.json";
+
+const herd = new Herd(idl);
+
+const STAKE = 10_000_000n; // 0.01 SOL
+const ROUND_SECONDS = 15;
+
+type Screen = "connect" | "lobby" | "waiting" | "playing" | "reveal" | "finished";
+
+interface RoomRef {
+  host: PublicKey;
+  roomId: bigint;
+}
+
+export default function App() {
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [screen, setScreen] = useState<Screen>("connect");
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const [ref, setRef] = useState<RoomRef | null>(null);
+  const [session, setSession] = useState<Keypair | null>(null);
+  const [room, setRoom] = useState<RoomState | null>(null);
+  const [endpoint, setEndpoint] = useState<{ url: string; token?: string }>({ url: BASE_RPC });
+  const [pot, setPot] = useState(0);
+
+  const [joinCode, setJoinCode] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [sealedWord, setSealedWord] = useState<string | null>(null);
+
+  // The round the UI has already shown a reveal for, so it fires once.
+  const shown = useRef(0);
+  const closing = useRef(false);
+
+  /* ------------------------------------------------------------- polling */
+
+  const refresh = useCallback(async () => {
+    if (!ref) return;
+    try {
+      const key = herd.room(ref.host, ref.roomId);
+      const data = await accountData(endpoint.url, key, endpoint.token);
+      if (!data) return;
+      const next = herd.decodeRoom(data);
+      setRoom(next);
+      setPot(await lamportsOf(BASE_RPC, herd.vault(key)));
+    } catch {
+      // A poll that misses is not worth surfacing; the next one is a second away.
+    }
+  }, [ref, endpoint]);
+
+  useEffect(() => {
+    if (!ref) return;
+    refresh();
+    const id = setInterval(refresh, 1200);
+    return () => clearInterval(id);
+  }, [ref, refresh]);
+
+  /* ------------------------------------------------- react to game state */
+
+  useEffect(() => {
+    if (!room) return;
+
+    if (room.phase === Phase.Open) setScreen("waiting");
+    else if (room.phase === Phase.Finished || room.phase === Phase.Settled) setScreen("finished");
+    else if (room.phase === Phase.Playing) {
+      // A round resolves when the oracle answers. Show what happened once.
+      if (!room.awaitingRule && room.rule !== Rule.Undrawn && shown.current !== room.round) {
+        shown.current = room.round;
+        setScreen("reveal");
+      } else if (screen !== "reveal") {
+        setScreen("playing");
+      }
+    }
+  }, [room]);
+
+  // Close the round when the clock runs out. Anyone may do it, so the app does
+  // rather than waiting for someone else to notice.
+  useEffect(() => {
+    if (!room || !wallet || room.phase !== Phase.Playing || room.awaitingRule) return;
+    const left = Number(room.roundEndsAt) - Math.floor(Date.now() / 1000);
+    if (left > 0 || closing.current || !session) return;
+
+    closing.current = true;
+    (async () => {
+      try {
+        await sendLocal(
+          endpoint.url,
+          [session],
+          [herd.closeRound(ref!.host, ref!.roomId, session.publicKey, room.round)],
+          endpoint.token,
+        );
+      } catch {
+        // Someone else got there first, which is fine - that is the point of
+        // letting anyone close a round.
+      } finally {
+        setTimeout(() => (closing.current = false), 4000);
+      }
+    })();
+  }, [room, session, endpoint]);
+
+  /* ------------------------------------------------------------- actions */
+
+  const run = async (label: string, fn: () => Promise<void>) => {
+    setError(null);
+    setBusy(label);
+    try {
+      await fn();
+    } catch (e) {
+      setError(explainWalletError(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Wallet signs, we submit. The wallet never chooses the network. */
+  const sendAsWallet = async (instructions: any[]) => {
+    if (!wallet) throw new Error("connect a wallet first");
+    const tx = new Transaction({
+      feePayer: new PublicKey(wallet.address),
+      recentBlockhash: await latestBlockhash(BASE_RPC),
+    });
+    instructions.forEach((i) => tx.add(i));
+    const signed = await signTransaction(wallet.authToken, tx, setWallet);
+    return submit(BASE_RPC, signed);
+  };
+
+  const onConnect = () =>
+    run("Connecting", async () => {
+      setWallet(await connectWallet());
+      setScreen("lobby");
+    });
+
+  const onCreate = () =>
+    run("Opening a room", async () => {
+      const host = new PublicKey(wallet!.address);
+      const roomId = BigInt(Date.now() % 1_000_000);
+      await sendAsWallet([herd.createRoom(host, roomId, STAKE, ROUND_SECONDS)]);
+      await sleep(2500);
+
+      const key = herd.room(host, roomId);
+      const mine = await sessionFor(key.toBase58());
+      setSession(mine);
+      await sendAsWallet([herd.joinRoom(host, roomId, host, mine.publicKey)]);
+
+      setRef({ host, roomId });
+      setScreen("waiting");
+    });
+
+  const onJoin = () =>
+    run("Taking a seat", async () => {
+      const [hostText, idText] = joinCode.trim().split(":");
+      const host = new PublicKey(hostText);
+      const roomId = BigInt(idText);
+      const key = herd.room(host, roomId);
+
+      const mine = await sessionFor(key.toBase58());
+      setSession(mine);
+      await sendAsWallet([
+        herd.joinRoom(host, roomId, new PublicKey(wallet!.address), mine.publicKey),
+      ]);
+
+      setRef({ host, roomId });
+      setScreen("waiting");
+    });
+
+  /** Lock, delegate, seal. Three steps, because each has to land before the next. */
+  const onStart = () =>
+    run("Locking the room", async () => {
+      const { host, roomId } = ref!;
+      await sendAsWallet([herd.lockRoom(host, roomId)]);
+      await sleep(2500);
+
+      setBusy("Handing it to the rollup");
+      await sendAsWallet([herd.delegateRoom(host, roomId, TEE_VALIDATOR)]);
+      await sleep(4000);
+
+      setBusy("Sealing the answers");
+      const key = herd.room(host, roomId);
+      const status = await delegationOf(key);
+      if (!status.fqdn) throw new Error("the room did not reach a rollup");
+
+      const url = status.fqdn.replace(/\/$/, "");
+      const token = await authenticate(url, session!);
+      setEndpoint({ url, token });
+
+      // No wallet: sealing needs no signature, and a rollup transaction cannot
+      // be shown to one anyway - it carries the rollup's own blockhash, which no
+      // wallet can place on a Solana cluster.
+      await sendLocal(url, [session!], [herd.sealRoom(host, roomId)], token);
+      setScreen("playing");
+    });
+
+  /** The one that must never need a fingerprint. */
+  const onAnswer = () =>
+    run("Sealing", async () => {
+      const word = answer.trim();
+      if (!word) return;
+      await sendLocal(
+        endpoint.url,
+        [session!],
+        [herd.submitAnswer(ref!.host, ref!.roomId, session!.publicKey, word)],
+        endpoint.token,
+      );
+      setSealedWord(word);
+      setAnswer("");
+    });
+
+  const onSettle = () =>
+    run("Paying out", async () => {
+      const { host, roomId } = ref!;
+      if (room!.phase === Phase.Finished) {
+        try {
+          await sendLocal(
+            endpoint.url,
+            [session!],
+            [herd.finishRoom(host, roomId, session!.publicKey)],
+            endpoint.token,
+          );
+          await sleep(14000);
+        } catch {
+          // Already handed back by another player.
+        }
+      }
+      setEndpoint({ url: BASE_RPC });
+
+      const data = await accountData(BASE_RPC, herd.room(host, roomId));
+      const onBase = herd.decodeRoom(data!);
+      const winners = onBase.seats.filter((x) => x.alive).map((x) => x.wallet);
+      await sendAsWallet([herd.settle(host, roomId, new PublicKey(wallet!.address), winners)]);
+      await refresh();
+    });
+
+  /* ---------------------------------------------------------------- view */
+
+  const mySeat = room?.seats.find((x) => x.session.toBase58() === session?.publicKey.toBase58());
+
+  return (
+    <KeyboardAvoidingView
+      style={s.root}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <StatusBar barStyle="light-content" backgroundColor="#0b0e13" />
+      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+        <View style={s.brand}>
+          <View style={s.mark} />
+          <View>
+            <Text style={s.title}>Herd</Text>
+            <Text style={s.tagline}>say what everyone else says</Text>
+          </View>
+        </View>
+
+        {error && (
+          <View style={[s.card, s.cardBad, { marginBottom: 14 }]}>
+            <Text style={s.errTitle}>Didn't work</Text>
+            <Text style={s.err}>{error}</Text>
+          </View>
+        )}
+
+        {busy && (
+          <View style={[s.card, { marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 12 }]}>
+            <ActivityIndicator color="#ffcf3d" />
+            <Text style={s.body}>{busy}…</Text>
+          </View>
+        )}
+
+        {screen === "connect" && (
+          <View style={s.card}>
+            <Text style={s.lead}>
+              Everyone answers the same question <Text style={s.leadStrong}>at the same time</Text>,
+              in secret.
+            </Text>
+            <Text style={s.lead}>Stray from the herd and you're out.</Text>
+            <Button label="Connect wallet" onPress={onConnect} disabled={!!busy} />
+          </View>
+        )}
+
+        {screen === "lobby" && (
+          <>
+            <Text style={s.section}>START A GAME</Text>
+            <View style={s.card}>
+              <Text style={s.body}>
+                Open a room and share the code. Everyone stakes 0.01 SOL; the last one standing
+                takes the lot.
+              </Text>
+              <Button label="Open a room" onPress={onCreate} disabled={!!busy} />
+            </View>
+
+            <Text style={s.section}>OR JOIN ONE</Text>
+            <View style={s.card}>
+              <TextInput
+                style={s.input}
+                placeholder="paste a room code"
+                placeholderTextColor="#5f6b7c"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={joinCode}
+                onChangeText={setJoinCode}
+              />
+              <Button ghost label="Take a seat" onPress={onJoin} disabled={!!busy || !joinCode} />
+            </View>
+          </>
+        )}
+
+        {screen === "waiting" && room && ref && (
+          <Waiting
+            room={room}
+            code={`${ref.host.toBase58()}:${ref.roomId}`}
+            pot={pot}
+            isHost={wallet?.address === ref.host.toBase58()}
+            busy={!!busy}
+            onStart={onStart}
+          />
+        )}
+
+        {screen === "playing" && room && (
+          <Round
+            room={room}
+            question={questionFor(room.round)}
+            pot={pot}
+            answer={answer}
+            sealed={sealedWord && mySeat && answered(mySeat, room.round) ? sealedWord : null}
+            alive={!!mySeat?.alive}
+            busy={!!busy}
+            onChange={setAnswer}
+            onSubmit={onAnswer}
+          />
+        )}
+
+        {screen === "reveal" && room && (
+          <Reveal
+            room={room}
+            question={questionFor(shown.current)}
+            youAlive={!!mySeat?.alive}
+            onNext={() => setScreen(room.phase === Phase.Playing ? "playing" : "finished")}
+          />
+        )}
+
+        {screen === "finished" && room && (
+          <Finished
+            room={room}
+            pot={pot}
+            youWon={!!mySeat?.alive}
+            settled={room.phase === Phase.Settled}
+            busy={!!busy}
+            onSettle={onSettle}
+          />
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+/* -------------------------------------------------------------- pieces */
+
+export function Button({
+  label,
+  onPress,
+  disabled,
+  ghost,
+}: {
+  label: string;
+  onPress(): void;
+  disabled?: boolean;
+  ghost?: boolean;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        ghost ? s.btnGhost : s.btn,
+        pressed && s.btnPressed,
+        disabled && s.btnDisabled,
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Text style={ghost ? s.btnGhostText : s.btnText}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function Finished({
+  room,
+  pot,
+  youWon,
+  settled,
+  busy,
+  onSettle,
+}: {
+  room: RoomState;
+  pot: number;
+  youWon: boolean;
+  settled: boolean;
+  busy: boolean;
+  onSettle(): void;
+}) {
+  const survivors = room.seats.filter((x) => x.alive);
+  const share = survivors.length ? pot / survivors.length : 0;
+
+  return (
+    <View style={[s.card, youWon ? s.cardGood : s.cardBad]}>
+      <Text style={s.big}>
+        {youWon
+          ? survivors.length === 1
+            ? "Last one standing"
+            : "You made it to the end"
+          : "The herd moved on without you"}
+      </Text>
+      <Text style={s.body}>
+        {survivors.length === 1
+          ? "One player left after " + room.round + " rounds."
+          : survivors.length + " left after " + room.round + " rounds."}
+      </Text>
+      {youWon && (
+        <Text style={s.ruleLine}>
+          {(share / 1e9).toFixed(3)} SOL {settled ? "paid out" : "waiting for you"}
+        </Text>
+      )}
+      {!settled && <Button label="Pay out the pot" onPress={onSettle} disabled={busy} />}
+      {settled && <Text style={s.note}>Settled on Solana. The rollup never touched it.</Text>}
+    </View>
+  );
+}

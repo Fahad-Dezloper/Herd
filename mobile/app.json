@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Herd",
+    "slug": "herd",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "android": {
+      "package": "app.herd.mobile"
+    },
+    "plugins": [
+      "expo-status-bar",
+      "expo-secure-store"
+    ]
+  }
+}

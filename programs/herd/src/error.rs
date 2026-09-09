@@ -27,9 +27,9 @@ pub enum HerdError {
     #[msg("The round is closed")]
     RoundClosed,
     #[msg("The rule for this round has already been requested")]
-    RuleAlreadyRequested,
-    #[msg("The rule for this round has not been drawn")]
-    RuleNotDrawn,
+    CoinAlreadyRequested,
+    #[msg("The coin has not been flipped yet")]
+    CoinNotDrawn,
     #[msg("The game is not over")]
     NotFinished,
     #[msg("This room has already paid out")]

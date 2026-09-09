@@ -83,12 +83,12 @@ export function Round({
             Sealed. Nobody can read it — not the other players, not the host, not us.
           </Text>
         </View>
-      ) : room.awaitingRule || left <= 0 ? (
+      ) : room.awaitingCoin || left <= 0 ? (
         <View style={s.card}>
           <Text style={s.body}>
-            {room.awaitingRule
-              ? "Round closed. Drawing the rule…"
-              : "Time's up. Closing the round…"}
+            {room.awaitingCoin
+              ? "Two of you left. Flipping for it…"
+              : "Time's up. Scoring the round…"}
           </Text>
           <Text style={s.note}>
             {sealed
@@ -136,8 +136,8 @@ export function Round({
           />
           <Button label="Lock it in" onPress={onSubmit} disabled={busy || !answer.trim()} />
           <Text style={s.note}>
-            Tap one or write your own — an answer nobody else picks is how you stray, and under
-            the wrong rule that is exactly what you want.
+            Tap one or write your own. The fewest people on a word are the ones who go, so the
+            question is not what is right — it is what everybody else will pick.
           </Text>
         </View>
       )}

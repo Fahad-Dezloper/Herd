@@ -6,7 +6,7 @@ use ephemeral_rollups_sdk::anchor::delegate;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 
 use crate::error::HerdError;
-use crate::state::{Answers, Ending, Phase, Room, Rule, Seat, Vault, MAX_ANSWER, MAX_PLAYERS};
+use crate::state::{Answers, Ending, Outcome, Phase, Room, Seat, Vault, MAX_ANSWER, MAX_PLAYERS};
 use crate::{ANSWERS_SEED, EPHEMERAL_RENT_BUFFER, ROOM_SEED, VAULT_SEED};
 
 /// Fewest players a room can start with.
@@ -70,11 +70,11 @@ pub fn handle_create(
     room.phase = Phase::Open;
     room.round = 0;
     room.round_ends_at = 0;
-    room.rule = Rule::Undrawn;
+    room.outcome = Outcome::Pending;
     // Tallied at lock. Until then it is a placeholder, not a decision.
     room.ending = Ending::Split;
     room.coin_decided = false;
-    room.awaiting_rule = false;
+    room.awaiting_coin = false;
     room.seats = [Seat::empty(); MAX_PLAYERS];
     room.seat_count = 0;
     room.last_round = 0;
@@ -227,8 +227,8 @@ pub fn handle_lock(ctx: Context<LockRoom>) -> Result<()> {
 
     room.phase = Phase::Playing;
     room.round = 1;
-    room.rule = Rule::Undrawn;
-    room.awaiting_rule = false;
+    room.outcome = Outcome::Pending;
+    room.awaiting_coin = false;
     // The clock starts when the room reaches the rollup, not here - see
     // `seal_room`. Base-layer time would be spent on the delegation round trip.
     room.round_ends_at = 0;
@@ -354,10 +354,10 @@ mod delegate_layout_tests {
             phase: Phase::Open,
             round: 0,
             round_ends_at: 0,
-            rule: Rule::Undrawn,
+            outcome: Outcome::Pending,
             ending: Ending::Split,
             coin_decided: false,
-            awaiting_rule: false,
+            awaiting_coin: false,
             seats: [Seat {
                 wallet: Pubkey::default(),
                 session: Pubkey::default(),

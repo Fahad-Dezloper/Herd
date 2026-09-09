@@ -13,7 +13,7 @@
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 
-import { Rule, type RoomState } from "../lib/herd";
+import { Outcome, type RoomState } from "../lib/herd";
 import { s, shortKey, tint } from "./styles";
 import { Button } from "./Button";
 
@@ -55,7 +55,7 @@ export function Reveal({
   });
   groups.sort((a, b) => b.members.length - a.members.length);
 
-  const minority = room.rule === Rule.MinoritySurvives;
+  const tied = room.outcome === Outcome.Tied;
   const youSurvived = room.seats.some((x) => x.wallet.toBase58() === you && x.alive);
 
   return (
@@ -63,14 +63,13 @@ export function Reveal({
       <Text style={[s.body, { marginBottom: 12 }]}>{question}</Text>
 
       <View style={[s.card, s.cardGold, { marginBottom: 14 }]}>
-        <Text style={s.note}>Drawn after every answer was sealed</Text>
         <Text style={s.ruleLine}>
-          {minority ? "Minority survives" : "Majority survives"}
+          {tied ? "Nobody was the odd one" : "The smallest group strayed"}
         </Text>
         <Text style={s.note}>
-          {minority
-            ? "The biggest groups went. Being with the crowd is what killed them."
-            : "The smallest groups went. Straying is what killed them."}
+          {tied
+            ? "Every group was the same size, so there was no odd one out. Everybody plays the next question."
+            : "The fewest people on a word are the ones who strayed from the herd, and they go together."}
         </Text>
       </View>
 
@@ -94,9 +93,7 @@ export function Reveal({
                 <Text style={[s.note, { marginLeft: "auto" }]}>
                   {culled
                     ? "strayed"
-                    : group.members.length === 1
-                      ? "alone, and safe"
-                      : `${group.members.length} together`}
+                    : `${group.members.length} together`}
                 </Text>
               </View>
               <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>

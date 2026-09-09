@@ -90,14 +90,20 @@ pub enum Ending {
     Coin,
 }
 
+/// How a round ended.
+///
+/// The rule itself never changes: the smallest group strayed from the herd and
+/// goes. This records whether that actually happened, because it cannot always
+/// - if every group is the same size then nobody is odd, and a round where
+/// nobody is odd has to say so rather than looking like a round that failed.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, InitSpace, Debug)]
-pub enum Rule {
-    /// Not drawn yet. Nobody, including the players, can know which way it goes.
-    Undrawn,
-    /// The smallest groups are culled. Stay with the crowd.
-    MajoritySurvives,
-    /// The largest groups are culled. Stay away from the crowd.
-    MinoritySurvives,
+pub enum Outcome {
+    /// Not scored yet.
+    Pending,
+    /// The smallest group went.
+    Smallest,
+    /// Every group was the same size. Nobody strayed, so nobody went.
+    Tied,
 }
 
 #[account]
@@ -124,7 +130,8 @@ pub struct Room {
     pub round: u16,
     /// Unix time after which the round can be closed by anyone.
     pub round_ends_at: i64,
-    pub rule: Rule,
+    /// How the round that just finished ended.
+    pub outcome: Outcome,
 
     /// The table's answer to "what happens at two", tallied when the door
     /// closes and fixed from then on - so nobody picks the ending once they can
@@ -137,8 +144,12 @@ pub struct Room {
     /// cannot tell whether the room out-guessed them or a coin did, and "you
     /// are out" with no reason reads as a bug rather than as a game.
     pub coin_decided: bool,
-    /// A VRF request is outstanding. Blocks a second request for the same round.
-    pub awaiting_rule: bool,
+    /// A coin flip has been asked of the oracle and not yet delivered.
+    ///
+    /// The only randomness left in a game. Rounds are decided by the room, so
+    /// they need nothing from an oracle; the flip between the final two does,
+    /// and only when the table voted for one.
+    pub awaiting_coin: bool,
 
     pub seats: [Seat; MAX_PLAYERS],
     pub seat_count: u8,

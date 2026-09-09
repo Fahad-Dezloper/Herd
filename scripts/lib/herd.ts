@@ -39,10 +39,20 @@ export enum Ending {
   Coin = 1,
 }
 
-export enum Rule {
-  Undrawn = 0,
-  MajoritySurvives = 1,
-  MinoritySurvives = 2,
+/**
+ * How a round ended.
+ *
+ * The rule never changes - the smallest group strayed and goes - so this
+ * records whether that happened, not which rule applied. It cannot always: a
+ * room where every group is the same size has no odd one out, and a round like
+ * that has to say so rather than looking like one that failed.
+ */
+export enum Outcome {
+  Pending = 0,
+  /** The smallest group went. */
+  Smallest = 1,
+  /** Every group was the same size. Nobody strayed, so nobody went. */
+  Tied = 2,
 }
 
 export interface Seat {
@@ -70,12 +80,13 @@ export interface RoomState {
   phase: Phase;
   round: number;
   roundEndsAt: bigint;
-  rule: Rule;
+  outcome: Outcome;
   /** The table's vote on the tiebreak, tallied when the door closed. */
   ending: Ending;
   /** Whether the last two were separated by the coin rather than by the herd. */
   coinDecided: boolean;
-  awaitingRule: boolean;
+  /** A coin flip is out with the oracle and has not come back. */
+  awaitingCoin: boolean;
   seats: Seat[];
   /** What everyone said in the round that just finished. */
   lastRound: number;
@@ -246,13 +257,13 @@ export class Herd {
     at += 2;
     const roundEndsAt = view.getBigInt64(at, true);
     at += 8;
-    const rule = data[at] as Rule;
+    const outcome = data[at] as Outcome;
     at += 1;
     const ending = data[at] as Ending;
     at += 1;
     const coinDecided = data[at] === 1;
     at += 1;
-    const awaitingRule = data[at] === 1;
+    const awaitingCoin = data[at] === 1;
     at += 1;
 
     const seats: Seat[] = [];
@@ -298,10 +309,10 @@ export class Herd {
       phase,
       round,
       roundEndsAt,
-      rule,
+      outcome,
       ending,
       coinDecided,
-      awaitingRule,
+      awaitingCoin,
       seats: seats.slice(0, seatCount),
       lastRound,
       lastWords: lastWords.slice(0, seatCount),

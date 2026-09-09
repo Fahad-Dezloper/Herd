@@ -23,7 +23,7 @@ use solana_signer::Signer;
 
 use common::*;
 use herd::error::HerdError;
-use herd::state::{Ending, Phase, Room, Rule, Seat, MAX_ANSWER, MAX_PLAYERS};
+use herd::state::{Ending, Outcome, Phase, Room, Seat, MAX_ANSWER, MAX_PLAYERS};
 
 const ROOM_ID: u64 = 11;
 const STAKE: u64 = 50_000_000;
@@ -115,7 +115,7 @@ fn finish_with(svm: &mut LiteSVM, host: &Pubkey, players: &[Keypair], alive: &[b
     let mut room = Room::try_deserialize(&mut existing.data.as_slice()).expect("room");
 
     room.phase = Phase::Finished;
-    room.rule = Rule::MajoritySurvives;
+    room.outcome = Outcome::Smallest;
     room.round = 4;
     for (i, still) in alive.iter().enumerate() {
         room.seats[i].alive = *still;

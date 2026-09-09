@@ -27,7 +27,7 @@ import {
   send,
   sleep,
 } from "./lib/chain";
-import { Ending, Herd, Phase, Rule } from "./lib/herd";
+import { Ending, Herd, Outcome, Phase } from "./lib/herd";
 
 const idl = await Bun.file(new URL("../target/idl/herd.json", import.meta.url).pathname).json();
 const herd = new Herd(idl);
@@ -198,25 +198,27 @@ for (let round = 1; round <= 8; round++) {
   if (wait > 0) await sleep(wait * 1000);
 
   await sendER([herd.closeRound(host.publicKey, ROOM_ID, session.publicKey, round)], [session], "close");
-  say("    round closed, rule requested from the oracle");
 
-  let after = null;
-  for (let i = 0; i < 20; i++) {
-    await sleep(1500);
-    const state = herd.decodeRoom((await accountData(ER, room, token))!);
-    if (!state.awaitingRule) {
-      after = state;
+  // Scoring happens in that transaction now - there is no oracle to wait for
+  // unless the room has reached two and voted to flip for it.
+  let after = herd.decodeRoom((await accountData(ER, room, token))!);
+  if (after.awaitingCoin) {
+    say("    two left - waiting on the coin");
+    for (let i = 0; i < 20; i++) {
+      await sleep(1500);
+      after = herd.decodeRoom((await accountData(ER, room, token))!);
+      if (!after.awaitingCoin) break;
+    }
+    if (after.awaitingCoin) {
+      bad("the oracle never answered");
       break;
     }
   }
-  if (!after) {
-    bad("the oracle never answered");
-    break;
-  }
 
-  const ruleName = after.rule === Rule.MinoritySurvives ? "minority survives" : "majority survives";
   const stillIn = after.seats.filter((s) => s.alive).length;
-  say(`    rule drawn: ${ruleName} -> ${alive.length - stillIn} culled, ${stillIn} left`);
+  say(
+    `    ${after.outcome === Outcome.Tied ? "every group the same size - nobody strayed" : "the smallest group strayed"} -> ${alive.length - stillIn} out, ${stillIn} left`,
+  );
 
   if (after.phase === Phase.Finished) {
     say(`\n[4] the game is over`);

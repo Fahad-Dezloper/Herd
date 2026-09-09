@@ -24,7 +24,7 @@ import {
   sleep,
   submit,
 } from "./src/lib/chain";
-import { Ending, Herd, Phase, Rule, type RoomState } from "./src/lib/herd";
+import { Ending, Herd, Phase, type RoomState } from "./src/lib/herd";
 import { explainChainError } from "./src/lib/errors";
 import { connectWallet, explainWalletError, signTransaction, type Wallet } from "./src/lib/mwa";
 import { sessionFor } from "./src/lib/session";
@@ -232,7 +232,7 @@ export default function App() {
   // Close the round when the clock runs out. Anyone may do it, so the app does
   // rather than waiting for someone else to notice.
   useEffect(() => {
-    if (!room || !wallet || room.phase !== Phase.Playing || room.awaitingRule) return;
+    if (!room || !wallet || room.phase !== Phase.Playing || room.awaitingCoin) return;
     const left = Number(room.roundEndsAt) - Math.floor(Date.now() / 1000);
     if (left > 0 || closing.current || !session) return;
 
@@ -259,7 +259,7 @@ export default function App() {
   // Bots answer on their own, once per round, spread across the window so the
   // room fills up the way it would with people in it.
   useEffect(() => {
-    if (!room || !ref || room.phase !== Phase.Playing || room.awaitingRule) return;
+    if (!room || !ref || room.phase !== Phase.Playing || room.awaitingCoin) return;
     if (bots.length === 0 || botted.current === room.round) return;
     botted.current = room.round;
 

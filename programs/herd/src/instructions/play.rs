@@ -12,7 +12,7 @@ use ephemeral_rollups_sdk::vrf::instructions::{
 use ephemeral_rollups_sdk::vrf::{self as vrf_api};
 
 use crate::error::HerdError;
-use crate::state::{Answers, Ending, Phase, Room, Rule, MAX_ANSWER, MAX_PLAYERS, MAX_ROUNDS};
+use crate::state::{Answers, Ending, Outcome, Phase, Room, MAX_ANSWER, MAX_PLAYERS, MAX_ROUNDS};
 use crate::{ANSWERS_SEED, ROOM_SEED};
 
 /* ------------------------------------------------------------------- seal */
@@ -127,7 +127,7 @@ pub fn handle_submit(ctx: Context<SubmitAnswer>, answer: Vec<u8>) -> Result<()> 
 
     require!(room.phase == Phase::Playing, HerdError::NotPlaying);
     require!(now <= room.round_ends_at, HerdError::RoundClosed);
-    require!(!room.awaiting_rule, HerdError::RoundClosed);
+    require!(!room.awaiting_coin, HerdError::RoundClosed);
 
     let index = room
         .seat_of(&ctx.accounts.session.key())
@@ -219,39 +219,92 @@ pub fn handle_close(ctx: Context<CloseRound>, client_seed: u8) -> Result<()> {
         let room = &ctx.accounts.room;
         require!(room.phase == Phase::Playing, HerdError::NotPlaying);
         require!(now > room.round_ends_at, HerdError::RoundStillOpen);
-        require!(!room.awaiting_rule, HerdError::RuleAlreadyRequested);
+        require!(!room.awaiting_coin, HerdError::CoinAlreadyRequested);
     }
 
-    let ix = create_request_scoped_randomness_ix(RequestRandomnessParams {
-        payer: ctx.accounts.payer.key(),
-        oracle_queue: ctx.accounts.oracle_queue.key(),
-        callback_program_id: crate::ID,
-        callback_discriminator: crate::instruction::CallbackRound::DISCRIMINATOR.to_vec(),
-        caller_seed: [client_seed; 32],
-        accounts_metas: Some(vec![
-            ephemeral_rollups_sdk::vrf::types::SerializableAccountMeta {
-                pubkey: ctx.accounts.room.key(),
-                is_signer: false,
-                is_writable: true,
-            },
-            ephemeral_rollups_sdk::vrf::types::SerializableAccountMeta {
-                pubkey: ctx.accounts.answers.key(),
-                is_signer: false,
-                is_writable: true,
-            },
-        ]),
-        ..Default::default()
-    });
-
-    ctx.accounts
-        .invoke_signed_vrf(&ctx.accounts.payer.to_account_info(), &ix)?;
-
-    // Mark the request before it can be fulfilled. Two live requests for one
-    // round would let whoever asked second pick which answer they liked.
+    let answers = &mut ctx.accounts.answers;
     let room = &mut ctx.accounts.room;
-    room.awaiting_rule = true;
 
-    msg!("herd: round {} closed, rule requested", room.round);
+    // Publish the round's words before scoring it. The reason to hide them
+    // expires the instant the window closes, and the reveal is the part of the
+    // game people actually play for.
+    room.last_round = room.round;
+    room.last_words = answers.words;
+    room.last_lengths = answers.lengths;
+
+    // Scored right here. The rule is fixed and every input is already on this
+    // account, so there is nothing to wait for - a round used to sit through an
+    // oracle round trip to be told something the room had already decided.
+    let culled = resolve_round(room, answers);
+    room.outcome = if culled > 0 {
+        Outcome::Smallest
+    } else {
+        Outcome::Tied
+    };
+
+    msg!(
+        "herd: round {} scored, {} strayed, {} left",
+        room.round,
+        culled,
+        room.alive_count()
+    );
+
+    // Two left. No round can separate them, so the table's vote decides it.
+    if room.alive_count() == 2 {
+        if room.ending == Ending::Coin {
+            let ix = create_request_scoped_randomness_ix(RequestRandomnessParams {
+                payer: ctx.accounts.payer.key(),
+                oracle_queue: ctx.accounts.oracle_queue.key(),
+                callback_program_id: crate::ID,
+                callback_discriminator: crate::instruction::CallbackRound::DISCRIMINATOR.to_vec(),
+                caller_seed: [client_seed; 32],
+                accounts_metas: Some(vec![
+                    ephemeral_rollups_sdk::vrf::types::SerializableAccountMeta {
+                        pubkey: ctx.accounts.room.key(),
+                        is_signer: false,
+                        is_writable: true,
+                    },
+                    ephemeral_rollups_sdk::vrf::types::SerializableAccountMeta {
+                        pubkey: ctx.accounts.answers.key(),
+                        is_signer: false,
+                        is_writable: true,
+                    },
+                ]),
+                ..Default::default()
+            });
+
+            ctx.accounts
+                .invoke_signed_vrf(&ctx.accounts.payer.to_account_info(), &ix)?;
+
+            // Marked before it can be fulfilled: two live requests for one flip
+            // would let whoever asked second keep the answer they preferred.
+            let room = &mut ctx.accounts.room;
+            room.awaiting_coin = true;
+            msg!("herd: two left, coin requested from the oracle");
+            return Ok(());
+        }
+
+        room.phase = Phase::Finished;
+        msg!("herd: two left and the table voted to split");
+        return Ok(());
+    }
+
+    if room.alive_count() <= 1 || room.round >= MAX_ROUNDS {
+        room.phase = Phase::Finished;
+        return Ok(());
+    }
+
+    advance(room, answers)
+}
+
+/// Set up the next round. Answers are cleared so a stale one cannot count twice.
+fn advance(room: &mut Room, answers: &mut Answers) -> Result<()> {
+    room.round += 1;
+    for seat in room.seats.iter_mut() {
+        seat.has_answered = false;
+    }
+    answers.clear();
+    room.round_ends_at = Clock::get()?.unix_timestamp + room.round_seconds as i64;
     Ok(())
 }
 
@@ -270,84 +323,20 @@ pub struct CallbackRound<'info> {
 pub fn handle_callback(ctx: Context<CallbackRound>, randomness: [u8; 32]) -> Result<()> {
     let room = &mut ctx.accounts.room;
 
-    // A duplicate delivery must not run the round twice. `awaiting_rule` is set
-    // when the request goes out and cleared here, so a second callback for the
-    // same round finds nothing to do.
-    if !room.awaiting_rule || room.phase != Phase::Playing {
-        msg!("herd: callback ignored, no request outstanding");
+    // A duplicate delivery must not flip twice. `awaiting_coin` is set when the
+    // request goes out and cleared here, so a second callback finds nothing to
+    // do and the game cannot be re-decided by a late message.
+    if !room.awaiting_coin || room.phase != Phase::Playing {
+        msg!("herd: callback ignored, no coin outstanding");
         return Ok(());
     }
+    room.awaiting_coin = false;
 
-    let rule = if randomness[0] % 2 == 0 {
-        Rule::MajoritySurvives
-    } else {
-        Rule::MinoritySurvives
-    };
-    room.rule = rule;
-    room.awaiting_rule = false;
+    flip_heads_up(room, randomness[0]);
+    room.coin_decided = true;
+    room.phase = Phase::Finished;
 
-    let answers = &mut ctx.accounts.answers;
-
-    // Publish the round's words before scoring it. The reason to hide them
-    // expires the instant the window closes, and the reveal is the part of the
-    // game people actually play for.
-    room.last_round = room.round;
-    room.last_words = answers.words;
-    room.last_lengths = answers.lengths;
-
-    let culled = resolve_round(room, answers, rule);
-    msg!(
-        "herd: round {} scored {:?}, {} culled, {} left",
-        room.round,
-        rule,
-        culled,
-        room.alive_count()
-    );
-
-    // Down to two, and the room has to be ended deliberately - no heads-up
-    // round can ever cull anybody (same word is one group of two, different
-    // words are two groups of one, and both rules would empty the room, so the
-    // guard stops them). Left alone, the last two would trade words until the
-    // round cap with nothing at stake. The table voted on this at the door.
-    if room.alive_count() == 2 {
-        match room.ending {
-            Ending::Split => {
-                msg!("herd: two left and the table voted to split");
-            }
-            Ending::Coin => {
-                // The same draw that decided the rule decides this. Byte 0 is
-                // already spoken for; byte 1 is independent of it and just as
-                // unpredictable, so the flip costs no second oracle round trip
-                // and no extra round of waiting.
-                flip_heads_up(room, randomness[1]);
-                room.coin_decided = true;
-                msg!("herd: two left, the coin fell - one takes it all");
-            }
-        }
-        room.phase = Phase::Finished;
-        return Ok(());
-    }
-
-    if room.alive_count() <= 1 || room.round >= MAX_ROUNDS {
-        room.phase = Phase::Finished;
-        return Ok(());
-    }
-
-    // Next round. Answers are cleared so a stale one cannot count twice.
-    //
-    // `rule` deliberately keeps the value that was just drawn rather than being
-    // reset. It is the most important thing that happened in the round, and a
-    // client polling a second later would otherwise find it already erased and
-    // have nothing to show. It says nothing about the next draw - each one is an
-    // independent request to the oracle - and `awaiting_rule` is what marks a
-    // round whose rule is not yet decided.
-    room.round += 1;
-    for seat in room.seats.iter_mut() {
-        seat.has_answered = false;
-    }
-    answers.clear();
-    room.round_ends_at = Clock::get()?.unix_timestamp + room.round_seconds as i64;
-
+    msg!("herd: the coin fell - one of the last two takes it all");
     Ok(())
 }
 
@@ -361,9 +350,11 @@ pub fn handle_callback(ctx: Context<CallbackRound>, randomness: [u8; 32]) -> Res
 /// a game with no winner.
 /// Cull one of the last two at random, leaving a single winner.
 ///
-/// The byte comes from the same VRF draw that decided the round's rule. Byte 0
-/// is already spoken for; byte 1 is independent of it and just as unpredictable,
-/// so the flip costs no second trip to the oracle and no extra round of waiting.
+/// The one thing in a game that a room cannot decide for itself. Two players
+/// cannot be separated by any rule - same word is one group, different words
+/// are two groups of one, and neither has a smallest - so a table that wants a
+/// single winner has to ask for something outside the game, and the oracle is
+/// the only thing here that no player can predict or influence.
 pub fn flip_heads_up(room: &mut Room, byte: u8) {
     let keep_second = byte % 2 == 1;
     let mut seen = 0;
@@ -375,7 +366,7 @@ pub fn flip_heads_up(room: &mut Room, byte: u8) {
     }
 }
 
-pub fn resolve_round(room: &mut Room, answers: &Answers, rule: Rule) -> usize {
+pub fn resolve_round(room: &mut Room, answers: &Answers) -> usize {
     let count = room.seat_count as usize;
     let round = room.round;
 
@@ -422,17 +413,18 @@ pub fn resolve_round(room: &mut Room, answers: &Answers, rule: Rule) -> usize {
         return 0;
     }
 
+    // The smallest group strayed. Every group that ties for smallest strays
+    // together - six players on six different words are all equally alone, and
+    // picking between them would need a reason that does not exist.
     let live_sizes = &sizes[..groups];
-    let target = match rule {
-        Rule::MajoritySurvives => *live_sizes.iter().min().unwrap(),
-        Rule::MinoritySurvives => *live_sizes.iter().max().unwrap(),
-        Rule::Undrawn => return 0,
-    };
+    let target = *live_sizes.iter().min().unwrap();
 
+    // Unless that is everybody. When every group is the same size nobody is the
+    // odd one, and there is no honest way to end a round like that except to
+    // play another.
     let doomed: usize = live_sizes.iter().filter(|&&s| s == target).sum();
-    let alive = room.alive_count();
-    if doomed >= alive {
-        msg!("herd: every group is the same size - nobody strays, nobody goes");
+    if doomed >= room.alive_count() {
+        msg!("herd: every group the same size - nobody strayed, nobody goes");
         return 0;
     }
 
@@ -536,10 +528,10 @@ mod tests {
             phase: Phase::Playing,
             round: 1,
             round_ends_at: 0,
-            rule: Rule::Undrawn,
+            outcome: Outcome::Pending,
             ending: Ending::Split,
             coin_decided: false,
-            awaiting_rule: false,
+            awaiting_coin: false,
             seats,
             seat_count: said.len() as u8,
             last_round: 0,
@@ -562,7 +554,7 @@ mod tests {
             .collect()
     }
 
-    /* ------------------------------------------------------- majority rule */
+    /* --------------------------------------------------- the smallest goes */
 
     #[test]
     fn the_smallest_group_is_culled() {
@@ -575,7 +567,7 @@ mod tests {
             Some("mango"),
         ]);
 
-        assert_eq!(resolve_round(&mut room, &answers, Rule::MajoritySurvives), 1);
+        assert_eq!(resolve_round(&mut room, &answers), 1);
         assert_eq!(room.alive_count(), 5);
         assert!(!alive_answers(&room, &answers).contains(&"mango".to_string()));
     }
@@ -591,7 +583,7 @@ mod tests {
         ]);
 
         // Three singletons all tie for smallest, so all three go.
-        assert_eq!(resolve_round(&mut room, &answers, Rule::MajoritySurvives), 3);
+        assert_eq!(resolve_round(&mut room, &answers), 3);
         assert_eq!(alive_answers(&room, &answers), vec!["apple", "apple"]);
     }
 
@@ -601,28 +593,11 @@ mod tests {
         // player who sits out is culled rather than carried.
         let (mut room, answers) = room_with(&[Some("apple"), Some("apple"), None]);
 
-        assert_eq!(resolve_round(&mut room, &answers, Rule::MajoritySurvives), 1);
+        assert_eq!(resolve_round(&mut room, &answers), 1);
         assert_eq!(room.alive_count(), 2);
     }
 
-    /* ------------------------------------------------------- minority rule */
-
-    #[test]
-    fn the_largest_group_is_culled_under_the_other_rule() {
-        let (mut room, answers) = room_with(&[
-            Some("apple"),
-            Some("apple"),
-            Some("apple"),
-            Some("banana"),
-            Some("mango"),
-        ]);
-
-        assert_eq!(resolve_round(&mut room, &answers, Rule::MinoritySurvives), 3);
-        assert_eq!(room.alive_count(), 2);
-        assert!(!alive_answers(&room, &answers).contains(&"apple".to_string()));
-    }
-
-    /* ------------------------------------------------------------ deadlock */
+    /* ------------------------------------------------------------- nobody odd */
 
     #[test]
     fn an_evenly_split_room_loses_nobody() {
@@ -637,7 +612,7 @@ mod tests {
             Some("f"),
         ]);
 
-        assert_eq!(resolve_round(&mut room, &answers, Rule::MajoritySurvives), 0);
+        assert_eq!(resolve_round(&mut room, &answers), 0);
         assert_eq!(room.alive_count(), 6);
     }
 
@@ -647,8 +622,8 @@ mod tests {
 
         // One group. It is both the largest and the smallest, so under either
         // rule culling it would empty the room.
-        assert_eq!(resolve_round(&mut room, &answers, Rule::MajoritySurvives), 0);
-        assert_eq!(resolve_round(&mut room, &answers, Rule::MinoritySurvives), 0);
+        assert_eq!(resolve_round(&mut room, &answers), 0);
+        assert_eq!(resolve_round(&mut room, &answers), 0);
         assert_eq!(room.alive_count(), 3);
     }
 
@@ -656,7 +631,7 @@ mod tests {
     fn two_even_groups_lose_nobody() {
         let (mut room, answers) = room_with(&[Some("a"), Some("a"), Some("b"), Some("b")]);
 
-        assert_eq!(resolve_round(&mut room, &answers, Rule::MajoritySurvives), 0);
+        assert_eq!(resolve_round(&mut room, &answers), 0);
         assert_eq!(room.alive_count(), 4);
     }
 
@@ -706,17 +681,15 @@ mod tests {
 
     #[test]
     fn two_players_can_never_resolve() {
-        for rule in [Rule::MajoritySurvives, Rule::MinoritySurvives] {
-            for said in [["fire", "fire"], ["fire", "water"]] {
-                let with: Vec<Option<&str>> = said.iter().map(|w| Some(*w)).collect();
-                let (mut room, answers) = room_with(&with);
-                let culled = resolve_round(&mut room, &answers, rule);
-                assert_eq!(
-                    culled, 0,
-                    "{rule:?} culled somebody from {said:?} - the guard should have stopped it"
-                );
-                assert_eq!(room.alive_count(), 2);
-            }
+        for said in [["fire", "fire"], ["fire", "water"]] {
+            let with: Vec<Option<&str>> = said.iter().map(|w| Some(*w)).collect();
+            let (mut room, answers) = room_with(&with);
+            assert_eq!(
+                resolve_round(&mut room, &answers),
+                0,
+                "somebody was culled from {said:?} - two players have no smallest group"
+            );
+            assert_eq!(room.alive_count(), 2);
         }
     }
 
@@ -734,29 +707,33 @@ mod tests {
         ];
 
         for shape in shapes {
-            for rule in [Rule::MajoritySurvives, Rule::MinoritySurvives] {
-                let (mut room, answers) = room_with(shape);
-                resolve_round(&mut room, &answers, rule);
-                assert!(
-                    room.alive_count() > 0,
-                    "a round emptied the room: {:?} under {:?}",
-                    shape,
-                    rule
-                );
-            }
+            let (mut room, answers) = room_with(shape);
+            resolve_round(&mut room, &answers);
+            assert!(
+                room.alive_count() > 0,
+                "a round emptied the room: {shape:?}"
+            );
         }
     }
 
     /* -------------------------------------------------------- the collusion */
 
     #[test]
-    fn a_cartel_survives_exactly_half_the_time() {
-        // The attack this game has to answer: three friends in one room agree on
-        // a word beforehand. They are always the largest group.
+    fn a_bloc_that_agrees_beforehand_always_survives() {
+        // Worth stating plainly, because it is the cost of a fixed rule.
         //
-        // If the largest group always survived, they would win every game
-        // forever - which is why the rule is drawn by VRF *after* their answers
-        // are sealed. Being a bloc is now as likely to kill them as save them.
+        // Three friends who agree on a word before the game are never the
+        // smallest group, so they are never the ones who stray. Under a rule
+        // drawn at random this was a coin toss for them; under "the smallest
+        // goes" it is not a gamble at all. That is the trade the fixed rule
+        // makes: a game anybody can follow, in exchange for one that rewards
+        // turning up with friends.
+        //
+        // The room is not defenceless - a bloc still has to out-guess the room
+        // to stay bigger than it, and their edge disappears once only the bloc
+        // is left, since a room of three who all say the same thing has no
+        // smallest group and eliminates nobody. But it is an edge, and pretending
+        // otherwise in a test would be worse than owning it here.
         let shape: &[Option<&str>] = &[
             Some("cartel"),
             Some("cartel"),
@@ -766,49 +743,35 @@ mod tests {
             Some("mango"),
         ];
 
-        let mut survived = 0;
-        let mut died = 0;
+        let (mut room, answers) = room_with(shape);
+        resolve_round(&mut room, &answers);
 
-        for byte in 0u8..=255 {
-            // Exactly how the callback draws it.
-            let rule = if byte % 2 == 0 {
-                Rule::MajoritySurvives
-            } else {
-                Rule::MinoritySurvives
-            };
-
-            let (mut room, answers) = room_with(shape);
-            resolve_round(&mut room, &answers, rule);
-
-            let cartel_alive = room.seats()[..3].iter().filter(|s| s.alive).count();
-            if cartel_alive == 3 {
-                survived += 1;
-            } else if cartel_alive == 0 {
-                died += 1;
-            } else {
-                panic!("the cartel was split, which should be impossible");
-            }
-        }
-
-        assert_eq!(survived, 128, "a cartel must not survive more than half");
-        assert_eq!(died, 128, "a cartel must not die more than half either");
+        assert_eq!(
+            room.seats()[..3].iter().filter(|s| s.alive).count(),
+            3,
+            "the bloc should be untouched - they are the biggest group"
+        );
+        assert_eq!(room.alive_count(), 3, "the three singletons all strayed");
     }
 
     #[test]
-    fn colluding_is_worse_than_playing_honestly_when_it_goes_wrong() {
-        // The cartel dies as a unit, so a bad draw costs all three seats at
-        // once. An honest player only ever loses their own.
+    fn a_bloc_only_loses_when_it_is_outnumbered() {
+        // The one thing that still costs a bloc: being the smallest group.
+        // Three friends on "cartel" against four strangers who happen to agree
+        // are the ones who stray, and they go together - one bad read costs all
+        // three seats where an honest player only ever loses their own.
         let (mut room, answers) = room_with(&[
             Some("cartel"),
             Some("cartel"),
             Some("cartel"),
             Some("apple"),
             Some("apple"),
-            Some("mango"),
+            Some("apple"),
+            Some("apple"),
         ]);
 
-        resolve_round(&mut room, &answers, Rule::MinoritySurvives);
+        resolve_round(&mut room, &answers);
         assert_eq!(room.seats()[..3].iter().filter(|s| s.alive).count(), 0);
-        assert_eq!(room.alive_count(), 3);
+        assert_eq!(room.alive_count(), 4);
     }
 }

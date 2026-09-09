@@ -1337,13 +1337,13 @@
     },
     {
       "code": 6012,
-      "name": "RuleAlreadyRequested",
+      "name": "CoinAlreadyRequested",
       "msg": "The rule for this round has already been requested"
     },
     {
       "code": 6013,
-      "name": "RuleNotDrawn",
-      "msg": "The rule for this round has not been drawn"
+      "name": "CoinNotDrawn",
+      "msg": "The coin has not been flipped yet"
     },
     {
       "code": 6014,
@@ -1464,6 +1464,31 @@
       }
     },
     {
+      "name": "Outcome",
+      "docs": [
+        "How a round ended.",
+        "",
+        "The rule itself never changes: the smallest group strayed from the herd and",
+        "goes. This records whether that actually happened, because it cannot always",
+        "- if every group is the same size then nobody is odd, and a round where",
+        "nobody is odd has to say so rather than looking like a round that failed."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Smallest"
+          },
+          {
+            "name": "Tied"
+          }
+        ]
+      }
+    },
+    {
       "name": "Phase",
       "type": {
         "kind": "enum",
@@ -1541,10 +1566,13 @@
             "type": "i64"
           },
           {
-            "name": "rule",
+            "name": "outcome",
+            "docs": [
+              "How the round that just finished ended."
+            ],
             "type": {
               "defined": {
-                "name": "Rule"
+                "name": "Outcome"
               }
             }
           },
@@ -1573,9 +1601,13 @@
             "type": "bool"
           },
           {
-            "name": "awaiting_rule",
+            "name": "awaiting_coin",
             "docs": [
-              "A VRF request is outstanding. Blocks a second request for the same round."
+              "A coin flip has been asked of the oracle and not yet delivered.",
+              "",
+              "The only randomness left in a game. Rounds are decided by the room, so",
+              "they need nothing from an oracle; the flip between the final two does,",
+              "and only when the table voted for one."
             ],
             "type": "bool"
           },
@@ -1645,23 +1677,6 @@
           {
             "name": "answers_bump",
             "type": "u8"
-          }
-        ]
-      }
-    },
-    {
-      "name": "Rule",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "Undrawn"
-          },
-          {
-            "name": "MajoritySurvives"
-          },
-          {
-            "name": "MinoritySurvives"
           }
         ]
       }

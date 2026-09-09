@@ -71,6 +71,20 @@ export const s = StyleSheet.create({
   btnGhostText: { color: colors.ink, fontWeight: "600", fontSize: 14.5 },
   btnDisabled: { opacity: 0.4 },
 
+  potBig: {
+    color: colors.gold,
+    fontSize: 34,
+    fontWeight: "800",
+    letterSpacing: -1,
+    marginVertical: 2,
+  },
+  lastWord: {
+    color: colors.ink,
+    fontSize: 14.5,
+    fontWeight: "600",
+    marginLeft: "auto",
+  },
+
   pickRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
   pick: {
     flex: 1,

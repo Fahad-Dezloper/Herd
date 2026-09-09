@@ -30,6 +30,7 @@ import { connectWallet, explainWalletError, signTransaction, type Wallet } from 
 import { sessionFor } from "./src/lib/session";
 import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
 import { EndingPick, EndingTally } from "./src/ui/EndingPick";
+import { Finished } from "./src/ui/Finished";
 import { questionFor } from "./src/questions";
 import { Seats, answered } from "./src/ui/Seats";
 import { Reveal } from "./src/ui/Reveal";
@@ -232,6 +233,26 @@ export default function App() {
   }, [room, bots, endpoint, ref]);
 
   /* ------------------------------------------------------------- actions */
+
+  /**
+   * Back to the lobby for another game.
+   *
+   * Everything tied to the finished room goes with it - a stale session key or
+   * room reference would otherwise be signing for a game that is over.
+   */
+  const onAgain = () => {
+    setRef(null);
+    setRoom(null);
+    setSession(null);
+    setPreview(null);
+    setPending(null);
+    setBots([]);
+    setJoinCode("");
+    setSealedWord(null);
+    setError(null);
+    setEndpoint({ url: BASE_RPC });
+    setScreen("lobby");
+  };
 
   const run = async (label: string, fn: () => Promise<void>) => {
     setError(null);
@@ -663,10 +684,12 @@ export default function App() {
           <Finished
             room={room}
             pot={pot}
+            you={wallet?.address}
             youWon={!!mySeat?.alive}
             settled={room.phase === Phase.Settled}
             busy={!!busy}
             onSettle={onSettle}
+            onAgain={onAgain}
           />
         )}
       </ScrollView>
@@ -699,65 +722,5 @@ export function Button({
     >
       <Text style={ghost ? s.btnGhostText : s.btnText}>{label}</Text>
     </Pressable>
-  );
-}
-
-function Finished({
-  room,
-  pot,
-  youWon,
-  settled,
-  busy,
-  onSettle,
-}: {
-  room: RoomState;
-  pot: number;
-  youWon: boolean;
-  settled: boolean;
-  busy: boolean;
-  onSettle(): void;
-}) {
-  const survivors = room.seats.filter((x) => x.alive);
-  const share = survivors.length ? pot / survivors.length : 0;
-
-  // Losing the final two to a coin is a different feeling from being
-  // out-guessed by the room, and the screen should not make you wonder which
-  // one just happened to you.
-  const coin = room.coinDecided;
-
-  return (
-    <View style={[s.card, youWon ? s.cardGood : s.cardBad]}>
-      <Text style={s.big}>
-        {youWon
-          ? coin
-            ? "The coin fell your way"
-            : survivors.length === 1
-              ? "Last one standing"
-              : "You made it to the end"
-          : coin
-            ? "You made the last two, and the coin didn't"
-            : "The herd moved on without you"}
-      </Text>
-      <Text style={s.body}>
-        {coin
-          ? `Down to two after ${room.round} rounds, and the table had voted to flip for it.`
-          : survivors.length === 1
-            ? "One player left after " + room.round + " rounds."
-            : survivors.length + " left after " + room.round + " rounds."}
-      </Text>
-      {!coin && survivors.length === 2 && (
-        <Text style={s.note}>
-          Two left is the end of it — no round can separate a pair, so the table's vote to share
-          stands.
-        </Text>
-      )}
-      {youWon && (
-        <Text style={s.ruleLine}>
-          {(share / 1e9).toFixed(3)} SOL {settled ? "paid out" : "waiting for you"}
-        </Text>
-      )}
-      {!settled && <Button label="Pay out the pot" onPress={onSettle} disabled={busy} />}
-      {settled && <Text style={s.note}>Settled on Solana. The rollup never touched it.</Text>}
-    </View>
   );
 }

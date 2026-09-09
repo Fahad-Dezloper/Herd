@@ -40,4 +40,9 @@ pub enum HerdError {
     Overflow,
     #[msg("Only the host can do that")]
     NotTheHost,
+
+    /// The room account does not derive from the host and room id we read out
+    /// of it - so one of those two reads is looking at the wrong bytes.
+    #[msg("Room account does not match its own contents")]
+    RoomLayoutDrift,
 }

@@ -7,30 +7,20 @@
  * written down - a hand-copied table drifts the moment a variant is inserted.
  */
 
-/** Must match the order of `HerdError` in programs/herd/src/error.rs. */
-const HERD_ERRORS = [
-  "RoomNotOpen",
-  "RoomFull",
-  "AlreadySeated",
-  "TooFewPlayers",
-  "NotPlaying",
-  "NotAPlayer",
-  "Eliminated",
-  "AlreadyAnswered",
-  "EmptyAnswer",
-  "AnswerTooLong",
-  "RoundStillOpen",
-  "RoundClosed",
-  "RuleAlreadyRequested",
-  "RuleNotDrawn",
-  "NotFinished",
-  "AlreadySettled",
-  "WrongWinners",
-  "Overflow",
-  "NotTheHost",
-] as const;
+import idl from "../idl.json";
 
-const PLAIN: Partial<Record<(typeof HERD_ERRORS)[number], string>> = {
+/**
+ * The codes themselves come from the IDL, which is generated from the enum, so
+ * inserting a variant cannot silently shift this table out from under the
+ * messages below. (An offset counted by hand elsewhere in this project shifted
+ * exactly that way and cost an afternoon.)
+ */
+const HERD_ERRORS: string[] = (idl.errors ?? []).map((e: { name: string }) => e.name);
+
+/** The first code Anchor assigns. Everything above is this plus the index. */
+const FIRST_CODE = (idl.errors ?? [])[0]?.code ?? 6000;
+
+const PLAIN: Record<string, string> = {
   RoundClosed: "Too slow — that round closed before your answer landed.",
   AlreadyAnswered: "You've already answered this round.",
   Eliminated: "You're out of this game.",
@@ -44,6 +34,7 @@ const PLAIN: Partial<Record<(typeof HERD_ERRORS)[number], string>> = {
   AlreadySettled: "This pot has already been paid out.",
   EmptyAnswer: "Type something first.",
   AnswerTooLong: "That answer is too long.",
+  RoomLayoutDrift: "This room looks wrong to the program. Open a fresh one.",
 };
 
 export function explainChainError(e: unknown): string | null {
@@ -53,8 +44,9 @@ export function explainChainError(e: unknown): string | null {
   const custom = /custom program error: (0x[0-9a-f]+|\d+)/i.exec(raw);
   if (custom) {
     const value = custom[1].startsWith("0x") ? parseInt(custom[1], 16) : Number(custom[1]);
-    if (value >= 6000 && value - 6000 < HERD_ERRORS.length) {
-      const name = HERD_ERRORS[value - 6000];
+    const index = value - FIRST_CODE;
+    if (index >= 0 && index < HERD_ERRORS.length) {
+      const name = HERD_ERRORS[index];
       return PLAIN[name] ?? `The program refused that: ${name}.`;
     }
     // 0x1 from the System Program is the one everybody meets first.

@@ -231,27 +231,49 @@ pub struct DelegateRoom<'info> {
 }
 
 pub fn handle_delegate(ctx: Context<DelegateRoom>, validator: Option<Pubkey>) -> Result<()> {
-    // Seeds are re-derived from the account's own data by the CPI; we pass the
-    // same ones the room was created with.
-    let data = ctx.accounts.room.try_borrow_data()?;
-    let host = Pubkey::try_from(&data[8..40]).map_err(|_| error!(HerdError::NotAPlayer))?;
-    let room_id = u64::from_le_bytes(
-        data[40..48]
-            .try_into()
-            .map_err(|_| error!(HerdError::NotAPlayer))?,
-    );
-    drop(data);
+    // The room is an UncheckedAccount here - the delegation CPI is about to
+    // reassign its owner, so Anchor cannot hold it as an Account. That means
+    // reading the three fields we need out of the raw bytes ourselves.
+    //
+    // Byte offsets are laid out once, in order, so that a field added to Room
+    // moves them together instead of leaving one of them behind. An earlier
+    // version hand-counted them, and when `host_session` was inserted the
+    // `room_id` offset stayed where it was and started reading the first eight
+    // bytes of the session key. The seeds that produced were still perfectly
+    // well-formed, just for an account that does not exist, so the failure
+    // arrived as "signer privilege escalated" from inside the delegation
+    // program with nothing pointing back here. The assertion below turns that
+    // whole class of mistake into a named error at the top of this function.
+    const HOST: usize = 8;
+    const HOST_SESSION: usize = HOST + 32;
+    const ROOM_ID: usize = HOST_SESSION + 32;
 
-    {
+    let (host, host_session, room_id) = {
         let data = ctx.accounts.room.try_borrow_data()?;
-        // host at 8, host_session at 40.
-        let host_session =
-            Pubkey::try_from(&data[40..72]).map_err(|_| error!(HerdError::NotTheHost))?;
-        let who = ctx.accounts.authority.key();
-        require!(who == host || who == host_session, HerdError::NotTheHost);
-    }
+        (
+            Pubkey::try_from(&data[HOST..HOST + 32]).map_err(|_| error!(HerdError::NotAPlayer))?,
+            Pubkey::try_from(&data[HOST_SESSION..HOST_SESSION + 32])
+                .map_err(|_| error!(HerdError::NotTheHost))?,
+            u64::from_le_bytes(
+                data[ROOM_ID..ROOM_ID + 8]
+                    .try_into()
+                    .map_err(|_| error!(HerdError::NotAPlayer))?,
+            ),
+        )
+    };
 
     let room_key = ctx.accounts.room.key();
+
+    // If any offset above is wrong, these seeds address some other account and
+    // this fails here rather than four frames deep in a CPI.
+    let (expected, _) = Pubkey::find_program_address(
+        &[ROOM_SEED, host.as_ref(), &room_id.to_le_bytes()],
+        &crate::ID,
+    );
+    require_keys_eq!(expected, room_key, HerdError::RoomLayoutDrift);
+
+    let who = ctx.accounts.authority.key();
+    require!(who == host || who == host_session, HerdError::NotTheHost);
     ctx.accounts.delegate_room(
         &ctx.accounts.authority,
         &[ROOM_SEED, host.as_ref(), &room_id.to_le_bytes()],
@@ -271,4 +293,69 @@ pub fn handle_delegate(ctx: Context<DelegateRoom>, validator: Option<Pubkey>) ->
 
     msg!("herd: room and answers delegated, validator {:?}", validator);
     Ok(())
+}
+
+#[cfg(test)]
+mod delegate_layout_tests {
+    use super::*;
+    use anchor_lang::AnchorSerialize;
+
+    /// `handle_delegate` reads host, host_session and room_id out of the room's
+    /// raw bytes, because the account is unchecked at that point. Those offsets
+    /// have drifted once already - `room_id` was left at 40 when `host_session`
+    /// was inserted ahead of it, and the only symptom was a signer-privilege
+    /// error thrown by the delegation program. This serialises a real Room and
+    /// reads it back the way the handler does, so the next insertion fails here
+    /// instead of on devnet.
+    #[test]
+    fn the_delegate_offsets_match_the_struct() {
+        let host = Pubkey::new_unique();
+        let host_session = Pubkey::new_unique();
+        let room_id: u64 = 0x0123_4567_89ab_cdef;
+
+        let room = Room {
+            host,
+            host_session,
+            room_id,
+            stake: 50_000_000,
+            round_seconds: 30,
+            phase: Phase::Open,
+            round: 0,
+            round_ends_at: 0,
+            rule: Rule::Undrawn,
+            awaiting_rule: false,
+            seats: [Seat {
+                wallet: Pubkey::default(),
+                session: Pubkey::default(),
+                alive: false,
+                answered_round: 0,
+                has_answered: false,
+            }; MAX_PLAYERS],
+            seat_count: 0,
+            last_round: 0,
+            last_words: [[0u8; MAX_ANSWER]; MAX_PLAYERS],
+            last_lengths: [0u8; MAX_PLAYERS],
+            bump: 255,
+            vault_bump: 255,
+            answers_bump: 255,
+        };
+
+        // 8 bytes of discriminator, then the struct, exactly as on chain.
+        let mut data = vec![0u8; 8];
+        room.serialize(&mut data).unwrap();
+
+        const HOST: usize = 8;
+        const HOST_SESSION: usize = HOST + 32;
+        const ROOM_ID: usize = HOST_SESSION + 32;
+
+        assert_eq!(Pubkey::try_from(&data[HOST..HOST + 32]).unwrap(), host);
+        assert_eq!(
+            Pubkey::try_from(&data[HOST_SESSION..HOST_SESSION + 32]).unwrap(),
+            host_session,
+        );
+        assert_eq!(
+            u64::from_le_bytes(data[ROOM_ID..ROOM_ID + 8].try_into().unwrap()),
+            room_id,
+        );
+    }
 }

@@ -23,6 +23,7 @@ import {
   delegationOf,
   lamportsOf,
   loadKeypair,
+  rpc,
   send,
   sleep,
 } from "./lib/chain";
@@ -51,7 +52,18 @@ say(`vault   ${vault.toBase58()}\n`);
 /* ------------------------------------------------------------ seat them */
 
 say("[1] open a room and seat four players");
-await sendBase([herd.createRoom(host.publicKey, ROOM_ID, STAKE, ROUND_SECONDS)], "create");
+const session = Keypair.generate();
+await sendBase(
+  [
+    herd.createRoom(host.publicKey, ROOM_ID, STAKE, ROUND_SECONDS, session.publicKey),
+    SystemProgram.transfer({
+      fromPubkey: host.publicKey,
+      toPubkey: session.publicKey,
+      lamports: 60_000_000,
+    }),
+  ],
+  "create",
+);
 
 const players = Array.from({ length: 4 }, () => ({
   wallet: Keypair.generate(),
@@ -83,12 +95,18 @@ for (const p of players) {
 }
 say(`    four seats taken, vault holds ${await lamportsOf(BASE_RPC, vault)} lamports`);
 
-await sendBase([herd.lockRoom(host.publicKey, ROOM_ID)], "lock");
+// The host's session key runs the room from here - no wallet involved.
+await sendSession([session], [herd.lockRoom(host.publicKey, ROOM_ID, session.publicKey)], "lock");
+await sleep(2500);
 
 /* ------------------------------------------------- hand it to the rollup */
 
 say("\n[2] delegate the room and its answers to the TEE");
-await sendBase([herd.delegateRoom(host.publicKey, ROOM_ID, TEE_VALIDATOR)], "delegate");
+await sendSession(
+  [session],
+  [herd.delegateRoom(host.publicKey, ROOM_ID, session.publicKey, TEE_VALIDATOR)],
+  "delegate",
+);
 await sleep(3000);
 
 const status = await delegationOf(room);
@@ -98,10 +116,10 @@ say(`    answers -> ${answersStatus.fqdn} (${answersStatus.isDelegated})`);
 if (!status.fqdn) throw new Error("the room did not delegate");
 
 const ER = status.fqdn.replace(/\/$/, "");
-const token = await authenticate(ER, host);
+const token = await authenticate(ER, session);
 
 say("\n[3] seal the answers");
-await sendER([herd.sealRoom(host.publicKey, ROOM_ID)], [host], "seal");
+await sendER([herd.sealRoom(host.publicKey, ROOM_ID)], [session], "seal");
 await sleep(2000);
 
 const sealedRead = await accountData(ER, answers, token);
@@ -155,7 +173,7 @@ for (let round = 1; round <= 8; round++) {
   const wait = Number(mid.roundEndsAt) - now + 2;
   if (wait > 0) await sleep(wait * 1000);
 
-  await sendER([herd.closeRound(host.publicKey, ROOM_ID, host.publicKey, round)], [host], "close");
+  await sendER([herd.closeRound(host.publicKey, ROOM_ID, session.publicKey, round)], [session], "close");
   say("    round closed, rule requested from the oracle");
 
   let after = null;
@@ -189,7 +207,7 @@ if (finished.phase !== Phase.Finished) {
   bad(`the game did not finish (phase ${finished.phase})`);
 } else {
   say("\n[5] hand the room back to Solana and pay out");
-  await sendER([herd.finishRoom(host.publicKey, ROOM_ID, host.publicKey)], [host], "finish");
+  await sendER([herd.finishRoom(host.publicKey, ROOM_ID, session.publicKey)], [session], "finish");
   await sleep(14000);
 
   const onBase = herd.decodeRoom((await accountData(BASE_RPC, room))!);
@@ -197,8 +215,9 @@ if (finished.phase !== Phase.Finished) {
   say(`    survivors on Solana: ${winners.length}`);
 
   const before = await Promise.all(winners.map((w) => lamportsOf(BASE_RPC, w)));
-  await sendBase(
-    [herd.settle(host.publicKey, ROOM_ID, host.publicKey, winners)],
+  await sendSession(
+    [session],
+    [herd.settle(host.publicKey, ROOM_ID, session.publicKey, winners)],
     "settle",
   );
 
@@ -212,6 +231,22 @@ if (finished.phase !== Phase.Finished) {
 }
 
 /* ---------------------------------------------------------------- utils */
+
+/// Anything the host's session key signs on the base layer, waited on.
+///
+/// Firing one of these and reading the result straight away reports a payout of
+/// zero on a payout that worked - the vault is already empty by the time the
+/// next line runs, but the winner's balance has not caught up yet.
+async function sendSession(signers: Keypair[], ixs: any[], label: string) {
+  try {
+    const sig = await send(BASE_RPC, signers, ixs);
+    await confirm(BASE_RPC, sig);
+    return sig;
+  } catch (e: any) {
+    say(`    ${label} failed: ${String(e.message).split("\n").slice(0, 3).join(" | ")}`);
+    throw e;
+  }
+}
 
 async function sendBase(ixs: any[], label: string) {
   try {

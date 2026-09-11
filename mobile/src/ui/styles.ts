@@ -111,29 +111,38 @@ export const s = StyleSheet.create({
   guardText: { color: colors.muted, fontSize: 13, fontWeight: "600" },
   guardMore: { color: colors.goldInk, fontSize: 13, fontWeight: "700" },
 
-  sheet: { flex: 1, backgroundColor: colors.bg },
-  // The sheet opens edge to edge, so it clears the status bar itself.
-  sheetScroll: { padding: 22, paddingTop: 64, paddingBottom: 44 },
+  /* The fairness sheet fills the screen exactly - no scrolling, because a
+     promise you have to scroll for is one nobody reads. */
+  sheet: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    paddingTop: 62,
+    paddingHorizontal: 22,
+    paddingBottom: 30,
+    justifyContent: "space-between",
+  },
   sheetTitle: {
     color: colors.ink,
-    fontSize: 27,
+    fontSize: 26,
     fontWeight: "800",
     letterSpacing: -0.8,
-    marginBottom: 6,
+    marginBottom: 5,
   },
-  sheetLead: { color: colors.muted, fontSize: 14.5, lineHeight: 21, marginBottom: 22 },
-  guarantee: { gap: 5, paddingBottom: 17, marginBottom: 17, borderBottomWidth: 1, borderBottomColor: colors.line },
-  guaranteeLast: { borderBottomWidth: 0, marginBottom: 6, paddingBottom: 0 },
-  guaranteeHead: { flexDirection: "row", alignItems: "center", gap: 9 },
-  guaranteeTick: { color: colors.good, fontSize: 14, fontWeight: "800" },
-  guaranteeTitle: { color: colors.ink, fontSize: 16, fontWeight: "700", flex: 1, letterSpacing: -0.2 },
-  guaranteeBody: { color: colors.muted, fontSize: 13.5, lineHeight: 20 },
+  sheetLead: { color: colors.muted, fontSize: 13.5, lineHeight: 19 },
+
+  guarantees: { flex: 1, justifyContent: "space-evenly", paddingVertical: 8 },
+  guarantee: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  guaranteeText: { flex: 1, gap: 1 },
+  guaranteeTick: { color: colors.good, fontSize: 14, fontWeight: "800", lineHeight: 21 },
+  guaranteeTitle: { color: colors.ink, fontSize: 15.5, fontWeight: "700", letterSpacing: -0.2 },
+  guaranteeBody: { color: colors.muted, fontSize: 12.5, lineHeight: 17 },
   guaranteeBy: {
     color: colors.faint,
-    fontSize: 11,
+    fontSize: 9.5,
     fontWeight: "700",
-    letterSpacing: 0.8,
+    letterSpacing: 0.7,
     textTransform: "uppercase",
+    marginTop: 2,
   },
 
   walletRow: {

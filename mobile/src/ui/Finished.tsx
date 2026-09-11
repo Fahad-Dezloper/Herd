@@ -12,12 +12,14 @@ import { Text, View } from "react-native";
 
 import { Ending, type RoomState } from "../lib/herd";
 import { s, shortKey, tint } from "./styles";
+import { initial } from "./Seats";
 import { Button } from "./Button";
 
 export function Finished({
   room,
   pot,
   you,
+  nameOf,
   youWon,
   settled,
   busy,
@@ -27,6 +29,7 @@ export function Finished({
   room: RoomState;
   pot: number;
   you?: string;
+  nameOf?: (key: string) => string;
   youWon: boolean;
   settled: boolean;
   busy: boolean;
@@ -68,7 +71,7 @@ export function Finished({
           {survivors.length === 1
             ? youWon
               ? "All of it is yours."
-              : `All of it went to ${shortKey(survivors[0].wallet.toBase58())}.`
+              : `All of it went to ${nameOf?.(survivors[0].wallet.toBase58()) ?? shortKey(survivors[0].wallet.toBase58())}.`
             : `Split ${survivors.length} ways — ${(share / 1e9).toFixed(3)} SOL each.`}
         </Text>
         <Text style={s.note}>
@@ -89,12 +92,15 @@ export function Finished({
               const isYou = key === you;
               return (
                 <View key={key} style={[s.av, { backgroundColor: tint(key) }]}>
-                  <Text style={s.avText}>{isYou ? "Y" : key[0].toUpperCase()}</Text>
+                  <Text style={s.avText}>
+                    {initial(isYou ? "you" : (nameOf?.(key) ?? shortKey(key)))}
+                  </Text>
                 </View>
               );
             })}
             <Text style={s.seatName}>
-              the coin chose {youWon ? "you" : shortKey(survivors[0]?.wallet.toBase58() ?? "")}
+              the coin chose{" "}
+              {youWon ? "you" : (nameOf?.(survivors[0]?.wallet.toBase58() ?? "") ?? "")}
             </Text>
           </View>
           <Text style={s.note}>
@@ -105,7 +111,7 @@ export function Finished({
         </View>
       )}
 
-      <LastWords room={room} you={you} />
+      <LastWords room={room} you={you} nameOf={nameOf} />
 
       {!settled && youWon && (
         <View style={[s.card, { marginTop: 14 }]}>
@@ -155,7 +161,15 @@ export function Finished({
  * on chain - the program publishes each round's words once scoring them can no
  * longer be influenced by reading them.
  */
-function LastWords({ room, you }: { room: RoomState; you?: string }) {
+function LastWords({
+  room,
+  you,
+  nameOf,
+}: {
+  room: RoomState;
+  you?: string;
+  nameOf?: (key: string) => string;
+}) {
   const said = room.seats
     .map((seat, i) => ({ seat, word: room.lastWords[i] }))
     .filter((x) => x.word);
@@ -169,12 +183,13 @@ function LastWords({ room, you }: { room: RoomState; you?: string }) {
         {said.map(({ seat, word }) => {
           const key = seat.wallet.toBase58();
           const isYou = key === you;
+          const name = isYou ? "you" : (nameOf?.(key) ?? shortKey(key));
           return (
             <View key={key} style={[s.seatRow, !seat.alive && s.seatOut]}>
               <View style={[s.av, { backgroundColor: tint(key) }]}>
-                <Text style={s.avText}>{isYou ? "Y" : key[0].toUpperCase()}</Text>
+                <Text style={s.avText}>{initial(name)}</Text>
               </View>
-              <Text style={s.seatName}>{isYou ? "you" : shortKey(key)}</Text>
+              <Text style={s.seatName}>{name}</Text>
               <Text style={[s.lastWord, !seat.alive && s.seatStatusOut]}>{word}</Text>
             </View>
           );

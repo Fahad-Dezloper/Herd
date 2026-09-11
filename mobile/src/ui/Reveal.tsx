@@ -5,9 +5,10 @@
  * the reason to hide them is gone, and this is the part people actually play
  * for - so the program publishes them and this screen groups them up.
  *
- * The rule matters as much as the words. It was not knowable when anyone
- * answered: it comes from VRF after every word was locked, which is what makes
- * a cartel a gamble rather than a strategy.
+ * The rule never changes - the fewest people on a word strayed, and they go -
+ * so what this screen has to say is whether that happened. It cannot always:
+ * when every group is the same size nobody is the odd one, and a round like
+ * that has to say so rather than looking like one that failed.
  */
 
 import { useEffect, useState } from "react";
@@ -16,21 +17,24 @@ import { Text, View } from "react-native";
 import { Outcome, type RoomState } from "../lib/herd";
 import { colors, s, shortKey, tint } from "./styles";
 import { Button } from "./Button";
+import { initial } from "./Seats";
 
 interface Group {
   word: string;
-  members: { key: string; alive: boolean; isYou: boolean }[];
+  members: { key: string; alive: boolean; isYou: boolean; name: string }[];
 }
 
 export function Reveal({
   room,
   question,
   you,
+  nameOf,
   onNext,
 }: {
   room: RoomState;
   question: string;
   you?: string;
+  nameOf?: (key: string) => string;
   onNext(): void;
 }) {
   const [left, setLeft] = useState(7);
@@ -48,7 +52,12 @@ export function Reveal({
     const word = room.lastWords[i];
     if (!word) return;
     const key = seat.wallet.toBase58();
-    const member = { key, alive: seat.alive, isYou: key === you };
+    const member = {
+      key,
+      alive: seat.alive,
+      isYou: key === you,
+      name: key === you ? "you" : (nameOf?.(key) ?? shortKey(key)),
+    };
     const existing = groups.find((g) => g.word === word);
     if (existing) existing.members.push(member);
     else groups.push({ word, members: [member] });
@@ -107,7 +116,7 @@ export function Reveal({
                       m.isYou && { borderWidth: 2, borderColor: colors.goldInk },
                     ]}
                   >
-                    <Text style={s.avText}>{m.isYou ? "Y" : m.key[0].toUpperCase()}</Text>
+                    <Text style={s.avText}>{initial(m.name)}</Text>
                   </View>
                 ))}
               </View>

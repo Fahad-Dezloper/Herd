@@ -184,6 +184,23 @@ export default function App() {
     })();
   }, []);
 
+  /**
+   * What to call whoever is in a seat.
+   *
+   * A table of truncated public keys does not read as people, and it is the one
+   * thing that gives a bot away instantly - a real room has names in it. Bots
+   * carry theirs; anybody else is still their key, because that is genuinely
+   * all we know about them.
+   */
+  const nameOf = useCallback(
+    (key: string) => {
+      if (key === wallet?.address) return "you";
+      const bot = bots.find((b) => b.keypair.publicKey.toBase58() === key);
+      return bot ? bot.name : shortKey(key);
+    },
+    [bots, wallet],
+  );
+
   const refresh = useCallback(async () => {
     if (!ref) return;
     try {
@@ -284,7 +301,7 @@ export default function App() {
                 ref.host,
                 ref.roomId,
                 bot.keypair.publicKey,
-                botAnswer(question),
+                botAnswer(question, bot.persona),
               ),
             ],
             endpoint.token,
@@ -293,7 +310,7 @@ export default function App() {
           // A bot that misses the window is culled for it, exactly like a person
           // who did not answer. Nothing to recover.
         }
-      }, botDelay(room.roundSeconds));
+      }, botDelay(room.roundSeconds, bot.persona));
     });
   }, [room, bots, endpoint, ref]);
 
@@ -756,6 +773,7 @@ export default function App() {
             isHost={wallet?.address === ref.host.toBase58()}
             busy={!!busy}
             unseatedBots={unseatedBots}
+            nameOf={nameOf}
             onAddBots={() => onAddBots(BOT_SEATS)}
             onStart={onStart}
             onLeave={onLeave}
@@ -767,6 +785,7 @@ export default function App() {
             room={room}
             question={questionFor(room.round)}
             options={optionsFor(room.round)}
+            nameOf={nameOf}
             pot={pot}
             answer={answer}
             sealed={sealedWord && mySeat && answered(mySeat, room.round) ? sealedWord : null}
@@ -783,6 +802,7 @@ export default function App() {
             room={room}
             question={questionFor(room.lastRound)}
             you={wallet?.address}
+            nameOf={nameOf}
             onNext={() =>
               setScreen(room.phase === Phase.Playing ? "playing" : "finished")
             }
@@ -794,6 +814,7 @@ export default function App() {
             room={room}
             pot={pot}
             you={wallet?.address}
+            nameOf={nameOf}
             youWon={!!mySeat?.alive}
             settled={room.phase === Phase.Settled}
             busy={!!busy}

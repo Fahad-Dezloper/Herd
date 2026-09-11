@@ -18,6 +18,7 @@ export function Waiting({
   onAddBots,
   onStart,
   onLeave,
+  nameOf,
 }: {
   room: RoomState;
   code: string;
@@ -30,6 +31,7 @@ export function Waiting({
   onStart(): void;
   /** Take the seat back and the stake with it. */
   onLeave(): void;
+  nameOf?: (key: string) => string;
 }) {
   const enough = room.seats.length >= 3;
 
@@ -47,7 +49,7 @@ export function Waiting({
       </View>
 
       <Text style={s.section}>IN THE ROOM</Text>
-      <Seats room={room} />
+      <Seats room={room} nameOf={nameOf} />
 
       <EndingTally room={room} />
 

@@ -20,6 +20,7 @@ export function Round({
   onChange,
   onSubmit,
   onLeave,
+  nameOf,
 }: {
   room: RoomState;
   question: string;
@@ -34,6 +35,7 @@ export function Round({
   onSubmit(): void;
   /** Stop watching and go start another game. */
   onLeave(): void;
+  nameOf?: (key: string) => string;
 }) {
   const [left, setLeft] = useState(0);
 
@@ -143,7 +145,7 @@ export function Round({
       )}
 
       <Text style={s.section}>THE ROOM</Text>
-      <Seats room={room} />
+      <Seats room={room} nameOf={nameOf} />
     </>
   );
 }

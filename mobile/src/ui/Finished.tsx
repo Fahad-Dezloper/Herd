@@ -12,7 +12,7 @@ import { Text, View } from "react-native";
 
 import { Ending, type RoomState } from "../lib/herd";
 import { s, shortKey, tint } from "./styles";
-import { initial } from "./Seats";
+import { Avatar } from "./Bits";
 import { Button } from "./Button";
 
 export function Finished({
@@ -42,31 +42,52 @@ export function Finished({
 
   return (
     <>
-      <View style={[s.card, youWon ? s.cardGood : s.cardBad]}>
-        <Text style={s.big}>
+      {/* The moment, given the room a result deserves. */}
+      <View style={[s.card, youWon ? s.cardGood : s.cardBad, { alignItems: "center", gap: 10 }]}>
+        <Text style={s.crown}>{youWon ? "👑" : "🐑"}</Text>
+        <Text style={youWon ? s.champion : s.big}>
           {youWon
-            ? coin
-              ? "The coin fell your way"
-              : survivors.length === 1
-                ? "Last one standing"
-                : "You made it to the end"
+            ? survivors.length === 1
+              ? "HERD CHAMPION"
+              : "YOU MADE IT"
             : coin
-              ? "You made the last two, and the coin didn't"
-              : "The herd moved on without you"}
+              ? "The coin didn't"
+              : "The herd moved on"}
         </Text>
+        {survivors[0] && (
+          <Avatar
+            who={survivors[0].wallet.toBase58()}
+            name={
+              survivors[0].wallet.toBase58() === you
+                ? "you"
+                : nameOf?.(survivors[0].wallet.toBase58())
+            }
+            size={76}
+            you={survivors[0].wallet.toBase58() === you}
+          />
+        )}
+        <View style={s.ribbon}>
+          <Text style={s.ribbonText}>
+            {survivors.length === 1
+              ? youWon
+                ? "you"
+                : (nameOf?.(survivors[0].wallet.toBase58()) ?? "winner")
+              : `${survivors.length} survivors`}
+          </Text>
+        </View>
         <Text style={s.body}>
           {coin
-            ? `Down to two after ${room.round} rounds, and the table had voted to flip for it.`
+            ? `Down to two after ${room.round} rounds, and the table had voted to flip.`
             : survivors.length === 1
-              ? `One player left after ${room.round} rounds.`
+              ? `Last one standing after ${room.round} rounds.`
               : `${survivors.length} left after ${room.round} rounds.`}
         </Text>
       </View>
 
       {/* The money, and where it went. The thing everybody scrolls to. */}
-      <View style={[s.card, s.cardGold, { marginTop: 14 }]}>
-        <Text style={s.note}>THE POT</Text>
-        <Text style={s.potBig}>{(pot / 1e9).toFixed(3)} SOL</Text>
+      <View style={[s.card, s.cardGold, { marginTop: 14, alignItems: "center" }]}>
+        <Text style={s.section}>{settled ? "PAID OUT" : "THE POT"}</Text>
+        <Text style={s.potBig}>◎ {(pot / 1e9).toFixed(2)}</Text>
         <Text style={s.body}>
           {survivors.length === 1
             ? youWon
@@ -91,11 +112,13 @@ export function Finished({
               const key = seat.wallet.toBase58();
               const isYou = key === you;
               return (
-                <View key={key} style={[s.av, { backgroundColor: tint(key) }]}>
-                  <Text style={s.avText}>
-                    {initial(isYou ? "you" : (nameOf?.(key) ?? shortKey(key)))}
-                  </Text>
-                </View>
+                <Avatar
+                  key={key}
+                  who={key}
+                  name={isYou ? "you" : (nameOf?.(key) ?? shortKey(key))}
+                  size={34}
+                  you={isYou}
+                />
               );
             })}
             <Text style={s.seatName}>
@@ -138,7 +161,7 @@ export function Finished({
       <View style={{ marginTop: 18, gap: 10 }}>
         {!settled && youWon && (
           <Button
-            label={`Collect ${(share / 1e9).toFixed(3)} SOL`}
+            label={`CLAIM ◎ ${(share / 1e9).toFixed(2)}`}
             onPress={onSettle}
             disabled={busy}
           />
@@ -186,9 +209,7 @@ function LastWords({
           const name = isYou ? "you" : (nameOf?.(key) ?? shortKey(key));
           return (
             <View key={key} style={[s.seatRow, !seat.alive && s.seatOut]}>
-              <View style={[s.av, { backgroundColor: tint(key) }]}>
-                <Text style={s.avText}>{initial(name)}</Text>
-              </View>
+              <Avatar who={key} name={name} size={30} out={!seat.alive} you={isYou} />
               <Text style={s.seatName}>{name}</Text>
               <Text style={[s.lastWord, !seat.alive && s.seatStatusOut]}>{word}</Text>
             </View>

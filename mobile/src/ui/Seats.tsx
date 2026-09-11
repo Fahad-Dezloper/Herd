@@ -9,13 +9,8 @@
 import { Text, View } from "react-native";
 
 import type { RoomState, Seat } from "../lib/herd";
-import { s, shortKey, tint } from "./styles";
-
-/** First letter that is actually a letter - "0xTeo" should not show a zero. */
-export function initial(name: string): string {
-  const letter = name.split("").find((c) => /[a-z]/i.test(c));
-  return (letter ?? name[0] ?? "?").toUpperCase();
-}
+import { Avatar } from "./Bits";
+import { s, shortKey } from "./styles";
 
 export function answered(seat: Seat, round: number): boolean {
   return seat.hasAnswered && seat.answeredRound === round;
@@ -43,9 +38,7 @@ export function Seats({
             key={key}
             style={[s.seatRow, done && seat.alive && s.seatDone, !seat.alive && s.seatOut]}
           >
-            <View style={[s.av, { backgroundColor: tint(key) }]}>
-              <Text style={s.avText}>{initial(name)}</Text>
-            </View>
+            <Avatar who={key} name={name} size={30} out={!seat.alive} you={isYou} />
             <Text style={s.seatName}>{name}</Text>
             <Text
               style={[

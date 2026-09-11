@@ -31,6 +31,7 @@ import { sessionFor } from "./src/lib/session";
 import { secureStore } from "./src/lib/secure";
 import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
 import { EndingPick, EndingTally } from "./src/ui/EndingPick";
+import { Avatar, Pips, Wordmark } from "./src/ui/Bits";
 import { Fairness, GuardBar } from "./src/ui/Fairness";
 import { Finished } from "./src/ui/Finished";
 import { optionsFor, questionFor } from "./src/questions";
@@ -638,11 +639,13 @@ export default function App() {
       style={s.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
+      <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <View style={s.brand}>
-          <Text style={s.title}>Herd</Text>
-        </View>
+        {screen !== "connect" && screen !== "lobby" && (
+          <View style={[s.brand, { marginBottom: 18 }]}>
+            <Wordmark small />
+          </View>
+        )}
 
         {error && (
           <View style={[s.card, s.cardBad, { marginBottom: 14 }]}>
@@ -653,7 +656,7 @@ export default function App() {
 
         {busy && (
           <View style={[s.card, { marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 12 }]}>
-            <ActivityIndicator color={colors.goldInk} />
+            <ActivityIndicator color={colors.lime} />
             <Text style={s.body}>{busy}…</Text>
           </View>
         )}
@@ -666,12 +669,16 @@ export default function App() {
 
         {!restoring && screen === "connect" && (
           <>
-            <View style={s.card}>
-              <Text style={s.lead}>
-                Guess the same word as everyone else.{" "}
-                <Text style={s.leadStrong}>Guess something different and you're out.</Text>
+            <View style={s.brand}>
+              <Wordmark />
+              <Text style={s.tagline}>Think alike. Stay alive.</Text>
+              <Text style={s.flock}>🐑🐑🐑🐑</Text>
+            </View>
+            <View style={{ gap: 12, marginTop: 18 }}>
+              <Button label="Connect wallet  →" onPress={onConnect} disabled={!!busy} />
+              <Text style={[s.note, { textAlign: "center" }]}>
+                Everyone answers the same question. The odd one out goes.
               </Text>
-              <Button label="Connect wallet" onPress={onConnect} disabled={!!busy} />
             </View>
             <GuardBar onPress={() => setFairness(true)} />
           </>
@@ -679,27 +686,53 @@ export default function App() {
 
         {screen === "lobby" && (
           <>
-            <View style={s.card}>
-              <Text style={s.section}>JOIN A ROOM</Text>
-              <TextInput
-                style={s.input}
-                placeholder="paste a room code"
-                placeholderTextColor={colors.faint}
-                autoCapitalize="none"
-                autoCorrect={false}
-                value={joinCode}
-                onChangeText={setJoinCode}
-              />
-              <Button label="Look at the room" onPress={onFind} disabled={!!busy || !joinCode} />
+            <View style={s.brand}>
+              <Wordmark />
+              <Text style={s.tagline}>Think alike. Stay alive.</Text>
+              <Text style={s.flock}>🐑🐑🐑🐑</Text>
+            </View>
+
+            <View style={{ gap: 12, marginTop: 14 }}>
               <Button
-                ghost
-                label="Or open your own"
+                label="PLAY  →"
                 onPress={() => {
                   setVote(Ending.Split);
                   setScreen("opening");
                 }}
                 disabled={!!busy}
               />
+
+              <View style={s.split}>
+                <View style={s.splitCell}>
+                  <Text style={s.splitLabel}>Entry fee</Text>
+                  <Text style={s.splitValue}>{(Number(STAKE) / 1e9).toFixed(2)} ◎</Text>
+                </View>
+                <View style={[s.splitCell, s.splitDivide]}>
+                  <Text style={s.splitLabel}>Est. pot</Text>
+                  <Text style={s.splitValue}>
+                    ~{((Number(STAKE) * (BOT_SEATS + 1)) / 1e9).toFixed(2)} ◎
+                  </Text>
+                </View>
+              </View>
+
+              <View style={s.card}>
+                <Text style={s.section}>GOT A CODE?</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder="paste a room code"
+                  placeholderTextColor={colors.faint}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={joinCode}
+                  onChangeText={setJoinCode}
+                />
+                <Button
+                  ghost
+                  label="Look at the room"
+                  onPress={onFind}
+                  disabled={!!busy || !joinCode}
+                />
+              </View>
             </View>
 
             <GuardBar onPress={() => setFairness(true)} />
@@ -774,6 +807,7 @@ export default function App() {
             busy={!!busy}
             unseatedBots={unseatedBots}
             nameOf={nameOf}
+            you={wallet?.address}
             onAddBots={() => onAddBots(BOT_SEATS)}
             onStart={onStart}
             onLeave={onLeave}
@@ -786,6 +820,7 @@ export default function App() {
             question={questionFor(room.round)}
             options={optionsFor(room.round)}
             nameOf={nameOf}
+            you={wallet?.address}
             pot={pot}
             answer={answer}
             sealed={sealedWord && mySeat && answered(mySeat, room.round) ? sealedWord : null}

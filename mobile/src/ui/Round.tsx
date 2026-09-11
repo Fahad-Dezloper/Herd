@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 
 import type { RoomState } from "../lib/herd";
+import { Avatar, Pips } from "./Bits";
 import { Seats } from "./Seats";
 import { colors, s } from "./styles";
 import { Button } from "./Button";
@@ -21,6 +22,7 @@ export function Round({
   onSubmit,
   onLeave,
   nameOf,
+  you,
 }: {
   room: RoomState;
   question: string;
@@ -36,6 +38,7 @@ export function Round({
   /** Stop watching and go start another game. */
   onLeave(): void;
   nameOf?: (key: string) => string;
+  you?: string;
 }) {
   const [left, setLeft] = useState(0);
 
@@ -47,22 +50,26 @@ export function Round({
     return () => clearInterval(id);
   }, [room.roundEndsAt]);
 
-  const fraction = Math.min(1, left / Math.max(1, room.roundSeconds));
   const low = left <= 5;
+  const clock = `${String(Math.floor(left / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`;
 
   return (
     <>
       <View style={s.roundBar}>
         <Text style={s.chip}>Round {room.round}</Text>
-        <Text style={s.chip}>{room.seats.filter((x) => x.alive).length} left</Text>
-        <Text style={s.pot}>{(pot / 1e9).toFixed(3)} SOL</Text>
+        <Pips round={room.round} total={12} />
+        <Text style={s.pot}>{(pot / 1e9).toFixed(2)} ◎</Text>
       </View>
 
-      <View style={s.timerTrack}>
-        <View style={[s.timerFill, low && s.timerLow, { width: `${fraction * 100}%` }]} />
+      <View style={[s.clock, low && s.clockLow]}>
+        <Text style={{ fontSize: 15 }}>⏱</Text>
+        <Text style={[s.clockText, low && s.clockTextLow]}>{clock}</Text>
       </View>
 
-      <Text style={s.question}>{question}</Text>
+      {/* The question is the one piece of paper in a dark room. */}
+      <View style={s.paperCard}>
+        <Text style={s.question}>{question}</Text>
+      </View>
 
       {!alive ? (
         <View style={{ gap: 11 }}>
@@ -73,17 +80,13 @@ export function Round({
             </Text>
           </View>
           {/* Being out is not a reason to be stuck. Nothing here is waiting on
-              you - the survivors finish the game and the winner collects it -
-              so leaving costs nothing and starting another game is the more
-              likely thing to want. */}
+              you - the survivors finish the game and the winner collects it. */}
           <Button ghost label="Leave and start another" onPress={onLeave} disabled={busy} />
         </View>
       ) : sealed ? (
-        <View style={[s.card, s.cardGold, s.sealed]}>
+        <View style={[s.card, s.cardGood, s.sealed]}>
           <Text style={s.sealedWord}>{sealed}</Text>
-          <Text style={s.note}>
-            Sealed. Nobody can read it — not the other players, not the host, not us.
-          </Text>
+          <Text style={s.note}>Locked in. Nobody can read it — not even the host.</Text>
         </View>
       ) : room.awaitingCoin || left <= 0 ? (
         <View style={s.card}>
@@ -91,11 +94,6 @@ export function Round({
             {room.awaitingCoin
               ? "Two of you left. Flipping for it…"
               : "Time's up. Scoring the round…"}
-          </Text>
-          <Text style={s.note}>
-            {sealed
-              ? "Your answer is in."
-              : "No answer from you this round — silence counts as straying."}
           </Text>
         </View>
       ) : (
@@ -136,16 +134,49 @@ export function Round({
             onSubmitEditing={onSubmit}
             returnKeyType="done"
           />
-          <Button label="Lock it in" onPress={onSubmit} disabled={busy || !answer.trim()} />
-          <Text style={s.note}>
-            Tap one or write your own. The fewest people on a word are the ones who go, so the
-            question is not what is right — it is what everybody else will pick.
+          <Button label="LOCK IN  →" onPress={onSubmit} disabled={busy || !answer.trim()} />
+          <Text style={[s.note, { textAlign: "center" }]}>
+            Once you lock in, you can't change it.
           </Text>
         </View>
       )}
 
-      <Text style={s.section}>THE ROOM</Text>
-      <Seats room={room} nameOf={nameOf} />
+      {/* Who is at the table, and who has already gone. */}
+      <View style={{ marginTop: 20, gap: 10 }}>
+        <Text style={s.section}>THE ROOM</Text>
+        <PlayerRow room={room} you={you} nameOf={nameOf} />
+        <Seats room={room} you={you} nameOf={nameOf} />
+      </View>
     </>
+  );
+}
+
+/** Faces in a row, the way the reference shows a table at a glance. */
+function PlayerRow({
+  room,
+  you,
+  nameOf,
+}: {
+  room: RoomState;
+  you?: string;
+  nameOf?: (key: string) => string;
+}) {
+  return (
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+      {room.seats.map((seat) => {
+        const key = seat.wallet.toBase58();
+        return (
+          <Avatar
+            key={key}
+            who={key}
+            name={key === you ? "you" : nameOf?.(key)}
+            size={42}
+            out={!seat.alive}
+            you={key === you}
+            showName
+          />
+        );
+      })}
+    </View>
   );
 }

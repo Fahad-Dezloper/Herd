@@ -3,8 +3,8 @@
 import { Text, View } from "react-native";
 
 import type { RoomState } from "../lib/herd";
+import { Ring } from "./Bits";
 import { EndingTally } from "./EndingPick";
-import { Seats } from "./Seats";
 import { s } from "./styles";
 import { Button } from "./Button";
 
@@ -19,6 +19,7 @@ export function Waiting({
   onStart,
   onLeave,
   nameOf,
+  you,
 }: {
   room: RoomState;
   code: string;
@@ -32,57 +33,79 @@ export function Waiting({
   /** Take the seat back and the stake with it. */
   onLeave(): void;
   nameOf?: (key: string) => string;
+  you?: string;
 }) {
   const enough = room.seats.length >= 3;
+  const seats = room.seats.map((seat) => ({
+    key: seat.wallet.toBase58(),
+    alive: seat.alive,
+  }));
 
   return (
     <>
-      <View style={s.card}>
-        <View style={s.roundBar}>
-          <Text style={s.chip}>{room.seats.length} seated</Text>
-          <Text style={s.pot}>{(pot / 1e9).toFixed(3)} SOL</Text>
-        </View>
-        <Text style={s.note}>Share this so people can take a seat</Text>
-        <Text style={s.mono} selectable>
-          {code}
+      <Text style={[s.h1, { textAlign: "center" }]}>Finding your herd…</Text>
+      <Text style={[s.note, { textAlign: "center", marginTop: 4, marginBottom: 20 }]}>
+        {enough ? "Ready when you are." : "A game needs three people."}
+      </Text>
+
+      {/* A room of people, drawn as a room of people. A list of rows is a
+          spreadsheet; this is a table you are sitting at. */}
+      <Ring seats={seats} you={you} nameOf={nameOf}>
+        <Text style={s.ringCount}>{room.seats.length}</Text>
+        <Text style={s.ringLabel}>
+          {room.seats.length === 1 ? "player joined" : "players joined"}
         </Text>
+      </Ring>
+
+      <View style={[s.split, { marginTop: 24 }]}>
+        <View style={s.splitCell}>
+          <Text style={s.splitLabel}>Entry fee</Text>
+          <Text style={s.splitValue}>{(Number(room.stake) / 1e9).toFixed(2)} ◎</Text>
+        </View>
+        <View style={[s.splitCell, s.splitDivide]}>
+          <Text style={s.splitLabel}>Current pot</Text>
+          <Text style={s.splitValue}>{(pot / 1e9).toFixed(2)} ◎</Text>
+        </View>
       </View>
 
-      <Text style={s.section}>IN THE ROOM</Text>
-      <Seats room={room} nameOf={nameOf} />
+      <View style={{ marginTop: 16, gap: 9 }}>
+        <Text style={s.section}>SHARE THIS TO FILL THE ROOM</Text>
+        <View style={s.card}>
+          <Text style={s.mono} selectable>
+            {code}
+          </Text>
+        </View>
+      </View>
 
-      <EndingTally room={room} />
+      <View style={{ marginTop: 14 }}>
+        <EndingTally room={room} />
+      </View>
 
       {isHost ? (
-        <View style={{ marginTop: 18, gap: 10 }}>
+        <View style={{ marginTop: 16, gap: 10 }}>
           {unseatedBots > 0 && (
-            <>
-              <Button
-                ghost
-                label={`Seat ${unseatedBots} bots`}
-                onPress={onAddBots}
-                disabled={busy}
-              />
-              <Text style={s.note}>
-                Real seats with real stakes, signing for themselves — the program cannot tell them
-                from anyone else. They see no more than you do: the answers are sealed to them too.
-              </Text>
-            </>
+            <Button
+              ghost
+              label={`Seat ${unseatedBots} players`}
+              onPress={onAddBots}
+              disabled={busy}
+            />
           )}
-          <Button label="Start the game" onPress={onStart} disabled={busy || !enough} />
+          <Button label="START  →" onPress={onStart} disabled={busy || !enough} />
           {!enough && (
-            <Text style={s.note}>
-              Three is the smallest game there is. With two, every round is two groups of one -
-              which culls everybody or nobody.
+            <Text style={[s.note, { textAlign: "center" }]}>
+              Three is the smallest game there is.
             </Text>
           )}
         </View>
       ) : (
-        <Text style={[s.note, { marginTop: 18 }]}>Waiting for the host to start.</Text>
+        <Text style={[s.note, { marginTop: 18, textAlign: "center" }]}>
+          Waiting for the host to start.
+        </Text>
       )}
 
       {/* Nothing has happened yet, so nothing is owed - the stake comes back
-          whole. Once the room locks it is in play and this goes away. */}
+          whole. Once the room locks this goes away. */}
       <View style={{ marginTop: 12 }}>
         <Button ghost label="Leave and take my stake back" onPress={onLeave} disabled={busy} />
       </View>

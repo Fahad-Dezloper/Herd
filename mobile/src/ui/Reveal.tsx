@@ -17,7 +17,7 @@ import { Text, View } from "react-native";
 import { Outcome, type RoomState } from "../lib/herd";
 import { colors, s, shortKey, tint } from "./styles";
 import { Button } from "./Button";
-import { initial } from "./Seats";
+import { Avatar } from "./Bits";
 
 interface Group {
   word: string;
@@ -107,17 +107,15 @@ export function Reveal({
               </View>
               <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
                 {group.members.map((m) => (
-                  <View
+                  <Avatar
                     key={m.key}
-                    style={[
-                      s.av,
-                      { backgroundColor: tint(m.key) },
-                      !m.alive && { opacity: 0.45 },
-                      m.isYou && { borderWidth: 2, borderColor: colors.goldInk },
-                    ]}
-                  >
-                    <Text style={s.avText}>{initial(m.name)}</Text>
-                  </View>
+                    who={m.key}
+                    name={m.name}
+                    size={34}
+                    out={!m.alive}
+                    you={m.isYou}
+                    showName
+                  />
                 ))}
               </View>
             </View>

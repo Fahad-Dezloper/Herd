@@ -15,10 +15,14 @@ import { Modal, Pressable, Text, View } from "react-native";
 import { s } from "./styles";
 import { Button } from "./Button";
 
+type Tone = "Rollup" | "Random" | "Solana" | "Chain" | "Keys";
+
 interface Guarantee {
   title: string;
   body: string;
+  /** What keeps the promise, and the badge colour that groups it. */
   by: string;
+  tone: Tone;
 }
 
 const GUARANTEES: Guarantee[] = [
@@ -26,31 +30,37 @@ const GUARANTEES: Guarantee[] = [
     title: "Nobody sees your answer",
     body: "Not the players, not the host, not us. Every answer unlocks at the same instant.",
     by: "Private rollup",
+    tone: "Rollup",
   },
   {
     title: "Friends can't sit together",
     body: "Public rooms are dealt from a queue. You don't pick your table, so nobody can stack one.",
     by: "Verifiable randomness",
+    tone: "Random",
   },
   {
     title: "The coin can't be rigged",
     body: "If the last two flip for the pot, nobody can predict the result or choose it.",
     by: "Verifiable randomness",
+    tone: "Random",
   },
   {
     title: "Your stake never leaves Solana",
     body: "The rollup runs the game. It is never given control of the money.",
     by: "Solana",
+    tone: "Solana",
   },
   {
     title: "You can always get it back",
     body: "Leave before a game starts and you're refunded. An abandoned game can be finished by anyone.",
     by: "On chain",
+    tone: "Chain",
   },
   {
     title: "Playing costs no signature",
     body: "Approve once when you sit down. The key that answers can't touch your money.",
     by: "Session keys",
+    tone: "Keys",
   },
 ];
 
@@ -68,12 +78,16 @@ export function Fairness({ open, onClose }: { open: boolean; onClose(): void }) 
         <View style={s.guarantees}>
           {GUARANTEES.map((g) => (
             <View key={g.title} style={s.guarantee}>
-              <Text style={s.guaranteeTick}>✓</Text>
-              <View style={s.guaranteeText}>
-                <Text style={s.guaranteeTitle}>{g.title}</Text>
-                <Text style={s.guaranteeBody}>{g.body}</Text>
-                <Text style={s.guaranteeBy}>{g.by}</Text>
+              <View style={[s.badge, s[`badge${g.tone}`]]}>
+                <Text style={[s.badgeText, s[`badge${g.tone}Text`]]}>
+                  {g.by.toUpperCase()}
+                </Text>
               </View>
+              <View style={s.guaranteeHead}>
+                <Text style={s.guaranteeTick}>✓</Text>
+                <Text style={s.guaranteeTitle}>{g.title}</Text>
+              </View>
+              <Text style={s.guaranteeBody}>{g.body}</Text>
             </View>
           ))}
         </View>

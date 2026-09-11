@@ -130,20 +130,35 @@ export const s = StyleSheet.create({
   },
   sheetLead: { color: colors.muted, fontSize: 13.5, lineHeight: 19 },
 
-  guarantees: { flex: 1, justifyContent: "space-evenly", paddingVertical: 8 },
-  guarantee: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  guaranteeText: { flex: 1, gap: 1 },
-  guaranteeTick: { color: colors.good, fontSize: 14, fontWeight: "800", lineHeight: 21 },
-  guaranteeTitle: { color: colors.ink, fontSize: 15.5, fontWeight: "700", letterSpacing: -0.2 },
-  guaranteeBody: { color: colors.muted, fontSize: 12.5, lineHeight: 17 },
-  guaranteeBy: {
-    color: colors.faint,
-    fontSize: 9.5,
-    fontWeight: "700",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    marginTop: 2,
+  guarantees: { flex: 1, justifyContent: "space-evenly", paddingVertical: 6 },
+  guarantee: { gap: 4 },
+
+  /* The badge names the thing doing the work, and its colour groups them -
+     the two promises kept by the same draw wear the same badge, which is the
+     point rather than decoration. */
+  badge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 7,
   },
+  badgeText: { fontSize: 9.5, fontWeight: "800", letterSpacing: 0.8 },
+
+  badgeRollup: { backgroundColor: "#efe9ff" },
+  badgeRollupText: { color: "#4b3a9c" },
+  badgeRandom: { backgroundColor: "#fff1d4" },
+  badgeRandomText: { color: "#8a5a00" },
+  badgeSolana: { backgroundColor: "#e4f5ea" },
+  badgeSolanaText: { color: "#15703a" },
+  badgeChain: { backgroundColor: "#e6f0fb" },
+  badgeChainText: { color: "#1f5c99" },
+  badgeKeys: { backgroundColor: "#fdeade" },
+  badgeKeysText: { color: "#9a4a1c" },
+
+  guaranteeHead: { flexDirection: "row", alignItems: "center", gap: 7 },
+  guaranteeTick: { color: colors.good, fontSize: 13, fontWeight: "800" },
+  guaranteeTitle: { color: colors.ink, fontSize: 15.5, fontWeight: "700", letterSpacing: -0.2, flex: 1 },
+  guaranteeBody: { color: colors.muted, fontSize: 12.5, lineHeight: 17 },
 
   walletRow: {
     flexDirection: "row",

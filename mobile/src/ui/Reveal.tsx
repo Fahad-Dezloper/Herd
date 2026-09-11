@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 
 import { Outcome, type RoomState } from "../lib/herd";
-import { s, shortKey, tint } from "./styles";
+import { colors, s, shortKey, tint } from "./styles";
 import { Button } from "./Button";
 
 interface Group {
@@ -85,7 +85,7 @@ export function Reveal({
                 <Text
                   style={[
                     s.groupWord,
-                    culled && { color: "#f87171", textDecorationLine: "line-through" },
+                    culled && { color: colors.bad, textDecorationLine: "line-through" },
                   ]}
                 >
                   {group.word}
@@ -104,7 +104,7 @@ export function Reveal({
                       s.av,
                       { backgroundColor: tint(m.key) },
                       !m.alive && { opacity: 0.45 },
-                      m.isYou && { borderWidth: 2, borderColor: "#ffcf3d" },
+                      m.isYou && { borderWidth: 2, borderColor: colors.goldInk },
                     ]}
                   >
                     <Text style={s.avText}>{m.isYou ? "Y" : m.key[0].toUpperCase()}</Text>

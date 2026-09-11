@@ -5,7 +5,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 
 import type { RoomState } from "../lib/herd";
 import { Seats } from "./Seats";
-import { s } from "./styles";
+import { colors, s } from "./styles";
 import { Button } from "./Button";
 
 export function Round({
@@ -125,7 +125,7 @@ export function Round({
           <TextInput
             style={[s.input, s.inputBig]}
             placeholder="or type your own"
-            placeholderTextColor="#5f6b7c"
+            placeholderTextColor={colors.faint}
             autoCapitalize="none"
             autoCorrect={false}
             maxLength={24}

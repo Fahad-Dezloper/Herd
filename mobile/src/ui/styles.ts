@@ -2,28 +2,35 @@
 
 import { StyleSheet } from "react-native";
 
+/**
+ * Paper, not an inverted night screen.
+ *
+ * The neutrals carry a faint warm bias so they sit under the gold rather than
+ * fighting it, and the gold splits in two: the bright one is a fill you put
+ * dark text on, and `goldInk` is the only one legible as text on paper. Using
+ * the fill colour for a word is the mistake this pair exists to prevent.
+ */
 export const colors = {
-  bg: "#0b0e13",
-  surface: "#151a22",
-  surface2: "#1c232d",
-  line: "#252d39",
-  lineStrong: "#33404f",
-  ink: "#eef2f6",
-  muted: "#8b97a8",
-  faint: "#5f6b7c",
-  gold: "#ffcf3d",
-  good: "#4ade80",
-  bad: "#f87171",
+  bg: "#faf9f5",
+  surface: "#ffffff",
+  surface2: "#f2f0ea",
+  line: "#e5e2d9",
+  lineStrong: "#cdc8bb",
+  ink: "#16181d",
+  muted: "#5c6270",
+  faint: "#8b8f9a",
+  gold: "#ffc733",
+  goldInk: "#8a5a00",
+  good: "#15803d",
+  bad: "#c2381f",
 };
 
 export const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   scroll: { padding: 20, paddingTop: 56, paddingBottom: 44, flexGrow: 1 },
 
-  brand: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 24 },
-  mark: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.gold },
-  title: { color: colors.ink, fontSize: 22, fontWeight: "700", letterSpacing: -0.4 },
-  tagline: { color: colors.faint, fontSize: 12.5, marginTop: 2 },
+  brand: { marginBottom: 26 },
+  title: { color: colors.ink, fontSize: 30, fontWeight: "800", letterSpacing: -1 },
 
   lead: { color: colors.muted, fontSize: 16, lineHeight: 24, marginBottom: 8 },
   leadStrong: { color: colors.ink, fontWeight: "600" },
@@ -36,9 +43,9 @@ export const s = StyleSheet.create({
     padding: 18,
     gap: 12,
   },
-  cardBad: { backgroundColor: "#1e1414", borderColor: "#4a2b2b" },
-  cardGood: { backgroundColor: "#131e18", borderColor: "#2f4438" },
-  cardGold: { backgroundColor: "#1c1810", borderColor: "#4a3f1f" },
+  cardBad: { backgroundColor: "#fdf1ee", borderColor: "#f0cec4" },
+  cardGood: { backgroundColor: "#eef7f0", borderColor: "#c3e0cb" },
+  cardGold: { backgroundColor: "#fff8e3", borderColor: "#f0dda2" },
 
   section: {
     color: colors.faint,
@@ -69,7 +76,10 @@ export const s = StyleSheet.create({
     borderColor: colors.lineStrong,
   },
   btnGhostText: { color: colors.ink, fontWeight: "600", fontSize: 14.5 },
-  btnDisabled: { opacity: 0.4 },
+  // On paper a faded button reads as broken rather than unavailable, so a
+  // disabled one changes colour instead of going transparent.
+  btnDisabled: { backgroundColor: colors.surface2, borderColor: colors.line, borderWidth: 1 },
+  btnTextDisabled: { color: colors.faint },
 
   optRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   opt: {
@@ -80,9 +90,51 @@ export const s = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 16,
   },
-  optOn: { borderColor: colors.gold, backgroundColor: "#1c1810" },
+  optOn: { borderColor: colors.goldInk, backgroundColor: "#fff4d6" },
   optText: { color: colors.ink, fontSize: 15, fontWeight: "600" },
-  optTextOn: { color: colors.gold },
+  optTextOn: { color: colors.goldInk },
+
+  /* "Protected by MagicBlock", and what it opens */
+  guardBar: {
+    marginTop: 28,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surface2,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  guardDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.good },
+  guardText: { color: colors.muted, fontSize: 13, fontWeight: "600" },
+  guardMore: { color: colors.goldInk, fontSize: 13, fontWeight: "700" },
+
+  sheet: { flex: 1, backgroundColor: colors.bg },
+  // The sheet opens edge to edge, so it clears the status bar itself.
+  sheetScroll: { padding: 22, paddingTop: 64, paddingBottom: 44 },
+  sheetTitle: {
+    color: colors.ink,
+    fontSize: 27,
+    fontWeight: "800",
+    letterSpacing: -0.8,
+    marginBottom: 6,
+  },
+  sheetLead: { color: colors.muted, fontSize: 14.5, lineHeight: 21, marginBottom: 22 },
+  guarantee: { gap: 5, paddingBottom: 17, marginBottom: 17, borderBottomWidth: 1, borderBottomColor: colors.line },
+  guaranteeLast: { borderBottomWidth: 0, marginBottom: 6, paddingBottom: 0 },
+  guaranteeHead: { flexDirection: "row", alignItems: "center", gap: 9 },
+  guaranteeTick: { color: colors.good, fontSize: 14, fontWeight: "800" },
+  guaranteeTitle: { color: colors.ink, fontSize: 16, fontWeight: "700", flex: 1, letterSpacing: -0.2 },
+  guaranteeBody: { color: colors.muted, fontSize: 13.5, lineHeight: 20 },
+  guaranteeBy: {
+    color: colors.faint,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
 
   walletRow: {
     flexDirection: "row",
@@ -100,7 +152,7 @@ export const s = StyleSheet.create({
   },
 
   potBig: {
-    color: colors.gold,
+    color: colors.goldInk,
     fontSize: 34,
     fontWeight: "800",
     letterSpacing: -1,
@@ -123,9 +175,9 @@ export const s = StyleSheet.create({
     padding: 14,
     gap: 4,
   },
-  pickOn: { borderColor: colors.gold, backgroundColor: "#1c1810" },
+  pickOn: { borderColor: colors.goldInk, backgroundColor: "#fff4d6" },
   pickTitle: { color: colors.muted, fontSize: 15, fontWeight: "700" },
-  pickTitleOn: { color: colors.gold },
+  pickTitleOn: { color: colors.goldInk },
   pickBlurb: { color: colors.faint, fontSize: 12, lineHeight: 17 },
 
   input: {
@@ -154,7 +206,7 @@ export const s = StyleSheet.create({
     paddingVertical: 4,
     overflow: "hidden",
   },
-  pot: { color: colors.gold, fontSize: 13, fontWeight: "700", marginLeft: "auto" },
+  pot: { color: colors.goldInk, fontSize: 13, fontWeight: "700", marginLeft: "auto" },
 
   timerTrack: { height: 6, borderRadius: 3, backgroundColor: colors.surface2, marginBottom: 26 },
   timerFill: { height: 6, borderRadius: 3, backgroundColor: colors.gold },
@@ -170,7 +222,7 @@ export const s = StyleSheet.create({
   },
 
   sealed: { alignItems: "center", gap: 8 },
-  sealedWord: { color: colors.gold, fontSize: 24, fontWeight: "700" },
+  sealedWord: { color: colors.goldInk, fontSize: 24, fontWeight: "700" },
 
   seatRow: {
     flexDirection: "row",
@@ -183,30 +235,32 @@ export const s = StyleSheet.create({
     borderColor: colors.line,
     borderRadius: 11,
   },
-  seatDone: { borderColor: "#2f4438" },
-  seatOut: { opacity: 0.4 },
+  seatDone: { borderColor: "#c3e0cb" },
+  seatOut: { opacity: 0.45 },
   seatName: { flex: 1, color: colors.muted, fontSize: 13.5 },
   seatStatus: { fontSize: 12, color: colors.faint },
   seatStatusDone: { color: colors.good },
   seatStatusOut: { color: colors.bad },
 
   av: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  avText: { color: "#0b0e13", fontSize: 11, fontWeight: "800" },
+  avText: { color: "#16181d", fontSize: 11, fontWeight: "800" },
 
   /* reveal */
   big: { color: colors.ink, fontSize: 30, fontWeight: "700", letterSpacing: -0.5 },
-  ruleLine: { color: colors.gold, fontSize: 18, fontWeight: "700" },
-  groupWord: { color: colors.good, fontSize: 20, fontWeight: "700" },
+  ruleLine: { color: colors.goldInk, fontSize: 18, fontWeight: "700" },
+  groupWord: { color: colors.ink, fontSize: 20, fontWeight: "700" },
 
   /* misc */
-  err: { color: "#f0b8a6", fontSize: 13, lineHeight: 19 },
-  errTitle: { color: "#f0b8a6", fontSize: 14, fontWeight: "700" },
+  err: { color: "#8c3520", fontSize: 13, lineHeight: 19 },
+  errTitle: { color: "#8c3520", fontSize: 14, fontWeight: "700" },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
 });
 
 /** A stable colour for a public key, so a player looks the same all game. */
 export function tint(key: string): string {
-  const palette = ["#ffcf3d", "#4ade80", "#60a5fa", "#f472b6", "#c084fc", "#fb923c"];
+  // Pale enough to carry dark initials on paper, saturated enough to tell six
+  // players apart at a glance.
+  const palette = ["#ffd88a", "#a8dcb4", "#a9cdf5", "#f3b6cd", "#cfbaf0", "#f8c49a"];
   let n = 0;
   for (const c of key.slice(0, 8)) n += c.charCodeAt(0);
   return palette[n % palette.length];

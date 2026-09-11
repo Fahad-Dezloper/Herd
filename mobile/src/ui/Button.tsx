@@ -32,7 +32,9 @@ export function Button({
       onPress={onPress}
       disabled={disabled}
     >
-      <Text style={ghost ? s.btnGhostText : s.btnText}>{label}</Text>
+      <Text style={[ghost ? s.btnGhostText : s.btnText, disabled && s.btnTextDisabled]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }

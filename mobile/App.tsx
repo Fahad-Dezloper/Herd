@@ -31,6 +31,7 @@ import { sessionFor } from "./src/lib/session";
 import { secureStore } from "./src/lib/secure";
 import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
 import { EndingPick, EndingTally } from "./src/ui/EndingPick";
+import { Fairness, GuardBar } from "./src/ui/Fairness";
 import { Finished } from "./src/ui/Finished";
 import { optionsFor, questionFor } from "./src/questions";
 import { Seats, answered } from "./src/ui/Seats";
@@ -38,7 +39,7 @@ import { Reveal } from "./src/ui/Reveal";
 import { Round } from "./src/ui/Round";
 import { Waiting } from "./src/ui/Waiting";
 import { Button } from "./src/ui/Button";
-import { s, shortKey } from "./src/ui/styles";
+import { colors, s, shortKey } from "./src/ui/styles";
 import idl from "./src/idl.json";
 
 const herd = new Herd(idl);
@@ -120,6 +121,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("connect");
   /** True until the stored wallet has been looked for. */
   const [restoring, setRestoring] = useState(true);
+  /** The "why is this fair" sheet. */
+  const [fairness, setFairness] = useState(false);
   // The tiebreak is a property of one room, not a setting you carry around, so
   // it is asked once you are looking at the room it applies to.
   const [vote, setVote] = useState<Ending>(Ending.Split);
@@ -618,14 +621,10 @@ export default function App() {
       style={s.root}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <StatusBar barStyle="light-content" backgroundColor="#0b0e13" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.bg} />
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <View style={s.brand}>
-          <View style={s.mark} />
-          <View>
-            <Text style={s.title}>Herd</Text>
-            <Text style={s.tagline}>say what everyone else says</Text>
-          </View>
+          <Text style={s.title}>Herd</Text>
         </View>
 
         {error && (
@@ -637,7 +636,7 @@ export default function App() {
 
         {busy && (
           <View style={[s.card, { marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 12 }]}>
-            <ActivityIndicator color="#ffcf3d" />
+            <ActivityIndicator color={colors.goldInk} />
             <Text style={s.body}>{busy}…</Text>
           </View>
         )}
@@ -649,26 +648,35 @@ export default function App() {
         )}
 
         {!restoring && screen === "connect" && (
-          <View style={s.card}>
-            <Text style={s.lead}>
-              Everyone answers the same question <Text style={s.leadStrong}>at the same time</Text>,
-              in secret.
-            </Text>
-            <Text style={s.lead}>Stray from the herd and you're out.</Text>
-            <Button label="Connect wallet" onPress={onConnect} disabled={!!busy} />
-          </View>
+          <>
+            <View style={s.card}>
+              <Text style={s.lead}>
+                Guess the same word as everyone else.{" "}
+                <Text style={s.leadStrong}>Guess something different and you're out.</Text>
+              </Text>
+              <Button label="Connect wallet" onPress={onConnect} disabled={!!busy} />
+            </View>
+            <GuardBar onPress={() => setFairness(true)} />
+          </>
         )}
 
         {screen === "lobby" && (
           <>
-            <Text style={s.section}>START A GAME</Text>
             <View style={s.card}>
-              <Text style={s.body}>
-                Open a room and share the code. Everyone stakes 0.01 SOL; the last one standing
-                takes the lot.
-              </Text>
+              <Text style={s.section}>JOIN A ROOM</Text>
+              <TextInput
+                style={s.input}
+                placeholder="paste a room code"
+                placeholderTextColor={colors.faint}
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={joinCode}
+                onChangeText={setJoinCode}
+              />
+              <Button label="Look at the room" onPress={onFind} disabled={!!busy || !joinCode} />
               <Button
-                label="Open a room"
+                ghost
+                label="Or open your own"
                 onPress={() => {
                   setVote(Ending.Split);
                   setScreen("opening");
@@ -677,19 +685,7 @@ export default function App() {
               />
             </View>
 
-            <Text style={s.section}>OR JOIN ONE</Text>
-            <View style={s.card}>
-              <TextInput
-                style={s.input}
-                placeholder="paste a room code"
-                placeholderTextColor="#5f6b7c"
-                autoCapitalize="none"
-                autoCorrect={false}
-                value={joinCode}
-                onChangeText={setJoinCode}
-              />
-              <Button ghost label="Look at the room" onPress={onFind} disabled={!!busy || !joinCode} />
-            </View>
+            <GuardBar onPress={() => setFairness(true)} />
 
             <View style={s.walletRow}>
               <Text style={s.note}>
@@ -806,6 +802,7 @@ export default function App() {
           />
         )}
       </ScrollView>
+      <Fairness open={fairness} onClose={() => setFairness(false)} />
     </KeyboardAvoidingView>
   );
 }

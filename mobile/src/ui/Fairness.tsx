@@ -61,7 +61,13 @@ const GUARANTEES: Guarantee[] = [
   },
 ];
 
-export function Fairness({ open, onClose }: { open: boolean; onClose(): void }) {
+export function Fairness({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose(): void;
+}) {
   return (
     <Modal visible={open} animationType="slide" onRequestClose={onClose}>
       <View className="flex-1 bg-bg pt-14 px-5 pb-7 justify-between">
@@ -70,14 +76,17 @@ export function Fairness({ open, onClose }: { open: boolean; onClose(): void }) 
             Why this is fair
           </Text>
           <Text className="text-muted text-[13px] leading-[19px]">
-            Six ways a game like this is usually rigged — and what stops each one here.
+            Six ways a game like this is usually rigged — and what stops each
+            one here.
           </Text>
         </View>
 
         <View className="flex-1 justify-evenly py-1.5">
           {GUARANTEES.map((g) => (
             <View key={g.title} className="gap-1">
-              <View className={`self-start px-2.5 py-1 rounded-md ${g.badge.split(" ")[0]}`}>
+              <View
+                className={`self-start px-2.5 py-1 rounded-md ${g.badge.split(" ")[0]}`}
+              >
                 <Text
                   className={`text-[9.5px] font-extrabold tracking-[0.8px] ${g.badge.split(" ")[1]}`}
                 >
@@ -90,7 +99,9 @@ export function Fairness({ open, onClose }: { open: boolean; onClose(): void }) 
                   {g.title}
                 </Text>
               </View>
-              <Text className="text-muted text-[12.5px] leading-[17px]">{g.body}</Text>
+              <Text className="text-muted text-[12.5px] leading-[17px]">
+                {g.body}
+              </Text>
             </View>
           ))}
         </View>
@@ -110,8 +121,9 @@ export function GuardBar({ onPress }: { onPress(): void }) {
       accessibilityRole="button"
       accessibilityLabel="Protected by MagicBlock. See why this is fair."
     >
-      <View className="w-[7px] h-[7px] rounded-full bg-lime" />
-      <Text className="text-muted text-[12.5px] font-bold">Protected by MagicBlock</Text>
+      <Text className="text-muted text-[12.5px] font-bold">
+        Protected by MagicBlock
+      </Text>
       <Text className="text-lime text-[12.5px] font-extrabold">Why?</Text>
     </Pressable>
   );

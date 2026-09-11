@@ -308,6 +308,21 @@ export default function App() {
     if (!room || !ref || room.phase !== Phase.Playing || room.awaitingCoin)
       return;
     if (bots.length === 0 || botted.current === room.round) return;
+
+    // Not until the room is actually in the rollup with its clock running.
+    //
+    // Locking flips the phase to Playing on the base layer, but the clock does
+    // not start until the room has been delegated and sealed seven seconds
+    // later. A bot that answers in that gap is talking to an account that has
+    // already been handed away: every send fails, and because the round was
+    // marked done on the way in, the bots then sat out the whole of round one -
+    // the round a player watches most closely.
+    const started = Number(room.roundEndsAt);
+    if (endpoint.url === BASE_RPC || started === 0) return;
+
+    const left = started - Math.floor(Date.now() / 1000);
+    if (left <= 1) return;
+
     botted.current = room.round;
 
     const question = questionFor(room.round);
@@ -341,7 +356,10 @@ export default function App() {
             // who did not answer. Nothing to recover.
           }
         },
-        botDelay(room.roundSeconds, bot.persona),
+        // Against what is left of the window, not its full length - this can
+        // fire a few seconds in, and a bot scheduled past the close never
+        // answers at all.
+        botDelay(left, bot.persona),
       );
     });
   }, [room, bots, endpoint, ref]);
@@ -361,6 +379,9 @@ export default function App() {
     setPreview(null);
     setPending(null);
     setBots([]);
+    botted.current = 0;
+    shown.current = 0;
+    closing.current = false;
     setJoinCode("");
     setSealedWord(null);
     setError(null);
@@ -706,8 +727,12 @@ export default function App() {
 
         {error && (
           <View className="bg-bad-dim border border-bad-line rounded-card p-4 gap-3 mb-3.5">
-            <Text className="text-bad-ink text-sm font-extrabold">Didn't work</Text>
-            <Text className="text-bad-ink text-[13px] leading-[19px]">{error}</Text>
+            <Text className="text-bad-ink text-sm font-extrabold">
+              Didn't work
+            </Text>
+            <Text className="text-bad-ink text-[13px] leading-[19px]">
+              {error}
+            </Text>
           </View>
         )}
 
@@ -720,41 +745,49 @@ export default function App() {
 
         {restoring && screen === "connect" && (
           <View className="bg-surface border border-line rounded-card p-4 gap-3">
-            <Text className="text-faint text-note">Looking for your wallet…</Text>
+            <Text className="text-faint text-note">
+              Looking for your wallet…
+            </Text>
           </View>
         )}
 
         {!restoring && screen === "connect" && (
-          <>
+          <View className="flex flex-col h-full justify-between">
             <View className="items-center mb-1.5">
               <Wordmark />
-              <Text className="text-ink text-[15px] font-semibold -tracking-[0.2px] mt-0.5">Think alike. Stay alive.</Text>
+              <Text className="text-ink text-[15px] font-semibold -tracking-[0.2px] mt-0.5">
+                Think alike. Stay alive.
+              </Text>
               {/* An Image needs a size of its own - it has no text to grow around. */}
               <Image
                 source={require("./assets/landing/herds.png")}
-                className="w-[240px] h-[96px] mt-2.5 mb-1"
+                className="w-full h-[18vh] mt-2.5 mb-1"
                 resizeMode="contain"
               />
             </View>
-            <View style={{ gap: 12, marginTop: 18 }}>
-              <Button
-                label="Connect wallet  →"
-                onPress={onConnect}
-                disabled={!!busy}
-              />
-              <Text className="text-faint text-note text-center">
-                Everyone answers the same question. The odd one out goes.
-              </Text>
+            <View>
+              <View style={{ gap: 12, marginTop: 18 }}>
+                <Button
+                  label="Connect wallet"
+                  onPress={onConnect}
+                  disabled={!!busy}
+                />
+                <Text className="text-faint text-note text-center">
+                  Everyone answers the same question. The odd one out goes.
+                </Text>
+              </View>
+              <GuardBar onPress={() => setFairness(true)} />
             </View>
-            <GuardBar onPress={() => setFairness(true)} />
-          </>
+          </View>
         )}
 
         {screen === "lobby" && (
           <>
             <View className="items-center mb-1.5">
               <Wordmark />
-              <Text className="text-ink text-[15px] font-semibold -tracking-[0.2px] mt-0.5">Think alike. Stay alive.</Text>
+              <Text className="text-ink text-[15px] font-semibold -tracking-[0.2px] mt-0.5">
+                Think alike. Stay alive.
+              </Text>
               {/* An Image needs a size of its own - it has no text to grow around. */}
               <Image
                 source={require("./assets/landing/herds.png")}
@@ -775,13 +808,17 @@ export default function App() {
 
               <View className="flex-row bg-surface border border-line rounded-2xl overflow-hidden">
                 <View className="flex-1 p-3.5 gap-[3px]">
-                  <Text className="text-faint text-[11px] font-semibold">Entry fee</Text>
+                  <Text className="text-faint text-[11px] font-semibold">
+                    Entry fee
+                  </Text>
                   <Text className="text-ink text-[19px] font-extrabold -tracking-[0.5px]">
                     {(Number(STAKE) / 1e9).toFixed(2)} ◎
                   </Text>
                 </View>
                 <View className="flex-1 p-3.5 gap-[3px] border-l border-line">
-                  <Text className="text-faint text-[11px] font-semibold">Est. pot</Text>
+                  <Text className="text-faint text-[11px] font-semibold">
+                    Est. pot
+                  </Text>
                   <Text className="text-ink text-[19px] font-extrabold -tracking-[0.5px]">
                     ~{((Number(STAKE) * (BOT_SEATS + 1)) / 1e9).toFixed(2)} ◎
                   </Text>
@@ -789,7 +826,9 @@ export default function App() {
               </View>
 
               <View className="bg-surface border border-line rounded-card p-4 gap-3">
-                <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">GOT A CODE?</Text>
+                <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">
+                  GOT A CODE?
+                </Text>
                 <TextInput
                   className="bg-surface2 border border-line rounded-field px-4 py-3.5 text-ink text-[15px]"
                   placeholder="paste a room code"
@@ -814,7 +853,10 @@ export default function App() {
               <Text className="text-faint text-note">
                 {wallet ? `${shortKey(wallet.address)} · ${wallet.label}` : ""}
               </Text>
-              <Text className="text-faint text-[12.5px] font-bold ml-auto" onPress={onDisconnect}>
+              <Text
+                className="text-faint text-[12.5px] font-bold ml-auto"
+                onPress={onDisconnect}
+              >
                 Disconnect
               </Text>
             </View>
@@ -823,7 +865,9 @@ export default function App() {
 
         {screen === "opening" && (
           <>
-            <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">YOUR ROOM</Text>
+            <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">
+              YOUR ROOM
+            </Text>
             <View className="bg-surface border border-line rounded-card p-4 gap-3">
               <Text className="text-muted text-body">
                 Twelve seats, 0.01 SOL each. You can seat bots once it is open,
@@ -847,10 +891,14 @@ export default function App() {
 
         {screen === "joining" && preview && (
           <>
-            <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">THIS ROOM</Text>
+            <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">
+              THIS ROOM
+            </Text>
             <View className="bg-surface border border-line rounded-card p-4 gap-3">
               <View className="flex-row items-center gap-2.5 mb-3.5">
-                <Text className="text-muted text-note font-bold bg-surface border border-line rounded-full px-3 py-1 overflow-hidden">{preview.seats.length} seated</Text>
+                <Text className="text-muted text-note font-bold bg-surface border border-line rounded-full px-3 py-1 overflow-hidden">
+                  {preview.seats.length} seated
+                </Text>
                 <Text className="text-lime text-[13px] font-extrabold ml-auto">
                   {(
                     (Number(preview.stake) * preview.seats.length) /
@@ -865,7 +913,9 @@ export default function App() {
               </Text>
             </View>
 
-            <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">WHO IS IN</Text>
+            <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">
+              WHO IS IN
+            </Text>
             <Seats room={preview} />
 
             <View style={{ marginTop: 14 }}>

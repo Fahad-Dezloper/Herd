@@ -6,23 +6,20 @@
  * makes it impossible.
  *
  * It has to fit without scrolling, which is a constraint on the writing rather
- * than the layout: six promises that fit on a phone are six promises somebody
- * reads, and a paragraph each would have been six nobody does.
+ * than the layout: six promises that fit on a phone are six somebody reads,
+ * where a paragraph each would have been six nobody does.
  */
 
 import { Modal, Pressable, Text, View } from "react-native";
 
-import { s } from "./styles";
 import { Button } from "./Button";
-
-type Tone = "Rollup" | "Random" | "Solana" | "Chain" | "Keys";
 
 interface Guarantee {
   title: string;
   body: string;
-  /** What keeps the promise, and the badge colour that groups it. */
+  /** What keeps the promise, and the badge that groups it. */
   by: string;
-  tone: Tone;
+  badge: string;
 }
 
 const GUARANTEES: Guarantee[] = [
@@ -30,64 +27,70 @@ const GUARANTEES: Guarantee[] = [
     title: "Nobody sees your answer",
     body: "Not the players, not the host, not us. Every answer unlocks at the same instant.",
     by: "Private rollup",
-    tone: "Rollup",
+    badge: "bg-[#241d3d] text-[#b9a9ff]",
   },
   {
     title: "Friends can't sit together",
     body: "Public rooms are dealt from a queue. You don't pick your table, so nobody can stack one.",
     by: "Verifiable randomness",
-    tone: "Random",
+    badge: "bg-[#2b2a12] text-lime",
   },
   {
     title: "The coin can't be rigged",
     body: "If the last two flip for the pot, nobody can predict the result or choose it.",
     by: "Verifiable randomness",
-    tone: "Random",
+    badge: "bg-[#2b2a12] text-lime",
   },
   {
     title: "Your stake never leaves Solana",
     body: "The rollup runs the game. It is never given control of the money.",
     by: "Solana",
-    tone: "Solana",
+    badge: "bg-[#12291f] text-[#5fd39a]",
   },
   {
     title: "You can always get it back",
     body: "Leave before a game starts and you're refunded. An abandoned game can be finished by anyone.",
     by: "On chain",
-    tone: "Chain",
+    badge: "bg-[#13243a] text-[#7bb6f0]",
   },
   {
     title: "Playing costs no signature",
     body: "Approve once when you sit down. The key that answers can't touch your money.",
     by: "Session keys",
-    tone: "Keys",
+    badge: "bg-[#2f2113] text-[#e8a765]",
   },
 ];
 
 export function Fairness({ open, onClose }: { open: boolean; onClose(): void }) {
   return (
     <Modal visible={open} animationType="slide" onRequestClose={onClose}>
-      <View style={s.sheet}>
+      <View className="flex-1 bg-bg pt-14 px-5 pb-7 justify-between">
         <View>
-          <Text style={s.sheetTitle}>Why this is fair</Text>
-          <Text style={s.sheetLead}>
+          <Text className="text-ink text-[26px] font-extrabold -tracking-[0.8px] mb-1.5">
+            Why this is fair
+          </Text>
+          <Text className="text-muted text-[13px] leading-[19px]">
             Six ways a game like this is usually rigged — and what stops each one here.
           </Text>
         </View>
 
-        <View style={s.guarantees}>
+        <View className="flex-1 justify-evenly py-1.5">
           {GUARANTEES.map((g) => (
-            <View key={g.title} style={s.guarantee}>
-              <View style={[s.badge, s[`badge${g.tone}`]]}>
-                <Text style={[s.badgeText, s[`badge${g.tone}Text`]]}>
+            <View key={g.title} className="gap-1">
+              <View className={`self-start px-2.5 py-1 rounded-md ${g.badge.split(" ")[0]}`}>
+                <Text
+                  className={`text-[9.5px] font-extrabold tracking-[0.8px] ${g.badge.split(" ")[1]}`}
+                >
                   {g.by.toUpperCase()}
                 </Text>
               </View>
-              <View style={s.guaranteeHead}>
-                <Text style={s.guaranteeTick}>✓</Text>
-                <Text style={s.guaranteeTitle}>{g.title}</Text>
+              <View className="flex-row items-center gap-[7px]">
+                <Text className="text-lime text-[13px] font-extrabold">✓</Text>
+                <Text className="flex-1 text-ink text-[15px] font-bold -tracking-[0.2px]">
+                  {g.title}
+                </Text>
               </View>
-              <Text style={s.guaranteeBody}>{g.body}</Text>
+              <Text className="text-muted text-[12.5px] leading-[17px]">{g.body}</Text>
             </View>
           ))}
         </View>
@@ -102,14 +105,14 @@ export function Fairness({ open, onClose }: { open: boolean; onClose(): void }) 
 export function GuardBar({ onPress }: { onPress(): void }) {
   return (
     <Pressable
-      style={({ pressed }) => [s.guardBar, pressed && { opacity: 0.7 }]}
+      className="mt-6 flex-row items-center justify-center gap-2 py-3 rounded-field bg-surface border border-line active:opacity-70"
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel="Protected by MagicBlock. See why this is fair."
     >
-      <View style={s.guardDot} />
-      <Text style={s.guardText}>Protected by MagicBlock</Text>
-      <Text style={s.guardMore}>Why?</Text>
+      <View className="w-[7px] h-[7px] rounded-full bg-lime" />
+      <Text className="text-muted text-[12.5px] font-bold">Protected by MagicBlock</Text>
+      <Text className="text-lime text-[12.5px] font-extrabold">Why?</Text>
     </Pressable>
   );
 }

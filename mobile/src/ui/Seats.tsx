@@ -3,14 +3,14 @@
  *
  * This list is the reason the game state and the answers live in separate
  * accounts. You can see that someone has locked an answer in - which is most of
- * the tension in a fifteen-second round - and you cannot see what it was.
+ * the tension in a thirty-second round - and you cannot see what it was.
  */
 
 import { Text, View } from "react-native";
 
 import type { RoomState, Seat } from "../lib/herd";
 import { Avatar } from "./Bits";
-import { s, shortKey } from "./styles";
+import { shortKey } from "./styles";
 
 export function answered(seat: Seat, round: number): boolean {
   return seat.hasAnswered && seat.answeredRound === round;
@@ -27,7 +27,7 @@ export function Seats({
   nameOf?: (key: string) => string;
 }) {
   return (
-    <View style={{ gap: 8 }}>
+    <View className="gap-2">
       {room.seats.map((seat) => {
         const key = seat.wallet.toBase58();
         const done = answered(seat, room.round);
@@ -36,18 +36,18 @@ export function Seats({
         return (
           <View
             key={key}
-            style={[s.seatRow, done && seat.alive && s.seatDone, !seat.alive && s.seatOut]}
+            className={`flex-row items-center gap-3 py-2 px-3 bg-surface border rounded-field ${
+              !seat.alive ? "opacity-40 border-line" : done ? "border-lime-dim" : "border-line"
+            }`}
           >
             <Avatar who={key} name={name} size={30} out={!seat.alive} you={isYou} />
-            <Text style={s.seatName}>{name}</Text>
+            <Text className="flex-1 text-ink text-sm font-semibold">{name}</Text>
             <Text
-              style={[
-                s.seatStatus,
-                !seat.alive && s.seatStatusOut,
-                seat.alive && done && s.seatStatusDone,
-              ]}
+              className={`text-note font-semibold ${
+                !seat.alive ? "text-bad" : done ? "text-lime" : "text-faint"
+              }`}
             >
-              {!seat.alive ? "out" : done ? "answer sealed" : "thinking…"}
+              {!seat.alive ? "out" : done ? "locked in" : "thinking…"}
             </Text>
           </View>
         );

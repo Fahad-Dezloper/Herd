@@ -1,23 +1,23 @@
 /**
- * What everyone said, and what the coin flip did with it.
+ * What everyone said, and what it cost them.
  *
  * The words are only secret while the window is open. Once a round is scored
  * the reason to hide them is gone, and this is the part people actually play
  * for - so the program publishes them and this screen groups them up.
  *
  * The rule never changes - the fewest people on a word strayed, and they go -
- * so what this screen has to say is whether that happened. It cannot always:
- * when every group is the same size nobody is the odd one, and a round like
- * that has to say so rather than looking like one that failed.
+ * so what this has to say is whether that happened. It cannot always: when
+ * every group is the same size nobody is the odd one, and a round like that has
+ * to say so rather than looking like one that failed.
  */
 
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 
 import { Outcome, type RoomState } from "../lib/herd";
-import { colors, s, shortKey, tint } from "./styles";
-import { Button } from "./Button";
 import { Avatar } from "./Bits";
+import { shortKey } from "./styles";
+import { Button } from "./Button";
 
 interface Group {
   word: string;
@@ -66,46 +66,45 @@ export function Reveal({
 
   const tied = room.outcome === Outcome.Tied;
   const youSurvived = room.seats.some((x) => x.wallet.toBase58() === you && x.alive);
+  const gone = groups.filter((g) => g.members.every((m) => !m.alive));
 
   return (
     <>
-      <Text style={[s.body, { marginBottom: 12 }]}>{question}</Text>
+      <Text className="text-ink text-[25px] font-extrabold -tracking-[0.6px] text-center">
+        Here are the answers!
+      </Text>
+      <Text className="text-faint text-note text-center mt-1 mb-4">{question}</Text>
 
-      <View style={[s.card, s.cardGold, { marginBottom: 14 }]}>
-        <Text style={s.ruleLine}>
-          {tied ? "Nobody was the odd one" : "The smallest group strayed"}
-        </Text>
-        <Text style={s.note}>
-          {tied
-            ? "Every group was the same size, so there was no odd one out. Everybody plays the next question."
-            : "The fewest people on a word are the ones who strayed from the herd, and they go together."}
-        </Text>
-      </View>
-
-      <View style={{ gap: 10 }}>
+      <View className="gap-2.5">
         {groups.map((group) => {
           const culled = group.members.every((m) => !m.alive);
           return (
             <View
               key={group.word}
-              style={[s.card, culled ? s.cardBad : s.cardGood, { gap: 9 }]}
+              className={`rounded-card p-4 gap-2.5 border ${
+                culled ? "bg-bad-dim border-bad-line" : "bg-[#1b2411] border-lime-dim"
+              }`}
             >
-              <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+              <Text
+                className={`self-start rounded-lg px-2.5 py-1 text-micro font-extrabold tracking-widest overflow-hidden ${
+                  culled ? "bg-bad text-[#1c0d08]" : "bg-lime text-lime-ink"
+                }`}
+              >
+                {culled ? "ODD ONE OUT" : "THE HERD"}
+              </Text>
+              <View className="flex-row items-baseline">
                 <Text
-                  style={[
-                    s.groupWord,
-                    culled && { color: colors.bad, textDecorationLine: "line-through" },
-                  ]}
+                  className={`text-[19px] font-extrabold -tracking-[0.3px] ${
+                    culled ? "text-bad line-through" : "text-ink"
+                  }`}
                 >
                   {group.word}
                 </Text>
-                <Text style={[s.note, { marginLeft: "auto" }]}>
-                  {culled
-                    ? "strayed"
-                    : `${group.members.length} together`}
+                <Text className="text-faint text-note ml-auto">
+                  {culled ? "strayed" : `${group.members.length} together`}
                 </Text>
               </View>
-              <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+              <View className="flex-row flex-wrap gap-2.5">
                 {group.members.map((m) => (
                   <Avatar
                     key={m.key}
@@ -123,16 +122,42 @@ export function Reveal({
         })}
       </View>
 
-      <View style={[s.card, youSurvived ? s.cardGood : s.cardBad, { marginTop: 14 }]}>
-        <Text style={s.big}>{youSurvived ? "Still with the herd" : "You strayed"}</Text>
-        <Text style={s.body}>
+      {gone.length > 0 && (
+        <View className="bg-surface border border-line rounded-card p-4 mt-3.5">
+          <Text className="text-muted text-body">
+            <Text className="text-ink font-bold">
+              {gone.flatMap((g) => g.members.map((m) => m.name)).join(", ")}
+            </Text>
+            {gone.flatMap((g) => g.members).length === 1 ? " has been" : " have been"} eliminated.
+          </Text>
+        </View>
+      )}
+
+      {tied && (
+        <View className="bg-surface border border-line rounded-card p-4 mt-3.5 gap-1.5">
+          <Text className="text-lime text-base font-extrabold">Nobody was the odd one</Text>
+          <Text className="text-faint text-note">
+            Every group was the same size, so nobody strayed. Everybody plays the next question.
+          </Text>
+        </View>
+      )}
+
+      <View
+        className={`rounded-card p-4 mt-3.5 border ${
+          youSurvived ? "bg-[#1b2411] border-lime-dim" : "bg-bad-dim border-bad-line"
+        }`}
+      >
+        <Text className="text-ink text-2xl font-extrabold -tracking-[0.5px]">
+          {youSurvived ? "Still with the herd" : "You strayed"}
+        </Text>
+        <Text className="text-muted text-body mt-1">
           {room.seats.filter((x) => x.alive).length} left
           {youSurvived ? "" : ", playing for the pot without you"}.
         </Text>
       </View>
 
-      <View style={{ marginTop: 16 }}>
-        <Button label={`Carry on (${left})`} onPress={onNext} />
+      <View className="mt-4">
+        <Button label={`Next round  →  (${left})`} onPress={onNext} />
       </View>
     </>
   );

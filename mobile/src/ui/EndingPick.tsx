@@ -1,17 +1,16 @@
 /**
  * Choosing what happens if you make the final two.
  *
- * This has to be decided before the game rather than during it, and the reason
- * is the whole point: asked at the door, you are choosing whether you would
- * want to share a pot at all. Asked at the end, you would be choosing whether
- * to share one with a specific person you have just spent ten minutes with -
- * which is a different question, and a worse one.
+ * Decided before the game rather than during it, and the reason is the whole
+ * point: asked at the door, you are choosing whether you would want to share a
+ * pot at all. Asked at the end, you would be choosing whether to share one with
+ * a specific person you have just spent ten minutes with - a different
+ * question, and a worse one.
  */
 
-import React from "react";
 import { Pressable, Text, View } from "react-native";
+
 import { Ending, type RoomState } from "../lib/herd";
-import { s } from "./styles";
 
 export function EndingPick({
   value,
@@ -24,8 +23,10 @@ export function EndingPick({
 }) {
   return (
     <View>
-      <Text style={s.section}>IF IT COMES DOWN TO TWO</Text>
-      <View style={s.pickRow}>
+      <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">
+        If it comes down to two
+      </Text>
+      <View className="flex-row gap-2.5 mb-2">
         <Option
           picked={value === Ending.Split}
           title="Split it"
@@ -41,8 +42,8 @@ export function EndingPick({
           disabled={disabled}
         />
       </View>
-      <Text style={s.note}>
-        Everyone at the table gets a vote and the majority wins. If it's a tie, you split.
+      <Text className="text-faint text-note">
+        Everyone at the table gets a vote and the majority wins. A tie means you split.
       </Text>
     </View>
   );
@@ -63,19 +64,18 @@ function Option({
 }) {
   return (
     <Pressable
-      style={({ pressed }) => [
-        s.pick,
-        picked && s.pickOn,
-        pressed && s.btnPressed,
-        disabled && s.btnDisabled,
-      ]}
+      className={`flex-1 p-3.5 gap-1 rounded-2xl border active:opacity-80 ${
+        picked ? "border-lime bg-lime-dim" : "border-line bg-surface"
+      } ${disabled ? "opacity-50" : ""}`}
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="radio"
       accessibilityState={{ selected: picked }}
     >
-      <Text style={[s.pickTitle, picked && s.pickTitleOn]}>{title}</Text>
-      <Text style={s.pickBlurb}>{blurb}</Text>
+      <Text className={`text-[15px] font-extrabold ${picked ? "text-lime" : "text-muted"}`}>
+        {title}
+      </Text>
+      <Text className="text-faint text-note">{blurb}</Text>
     </Pressable>
   );
 }
@@ -93,10 +93,12 @@ export function EndingTally({ room }: { room: RoomState }) {
   const winning = coins > splits ? "a coin flip" : "a split";
 
   return (
-    <View style={[s.card, { marginTop: 14 }]}>
-      <Text style={s.note}>THE VOTE SO FAR</Text>
-      <Text style={s.body}>
-        <Text style={s.leadStrong}>{winning}</Text>
+    <View className="bg-surface border border-line rounded-card p-4 gap-1.5">
+      <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase">
+        The vote so far
+      </Text>
+      <Text className="text-muted text-body">
+        <Text className="text-ink font-bold">{winning}</Text>
         {coins === splits
           ? ` — the room is split ${coins}–${splits}, and a tie means you share.`
           : ` — ${Math.max(coins, splits)} of ${room.seats.length} want it that way.`}

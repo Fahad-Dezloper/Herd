@@ -14,6 +14,10 @@
 import "react-native-get-random-values";
 import { Buffer } from "buffer";
 
+// Tailwind's generated styles. Imported here for the same reason as the two
+// polyfills above: it has to be in place before any component renders.
+import "./global.css";
+
 if (typeof globalThis.Buffer === "undefined") {
   globalThis.Buffer = Buffer;
 }

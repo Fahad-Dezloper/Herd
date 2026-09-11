@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,7 +11,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import {
+  Keypair,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
 
 import {
   BASE_RPC,
@@ -26,7 +32,12 @@ import {
 } from "./src/lib/chain";
 import { Ending, Herd, Phase, type RoomState } from "./src/lib/herd";
 import { explainChainError } from "./src/lib/errors";
-import { connectWallet, explainWalletError, signTransaction, type Wallet } from "./src/lib/mwa";
+import {
+  connectWallet,
+  explainWalletError,
+  signTransaction,
+  type Wallet,
+} from "./src/lib/mwa";
 import { sessionFor } from "./src/lib/session";
 import { secureStore } from "./src/lib/secure";
 import { botAnswer, botDelay, botsFor, type Bot } from "./src/bots";
@@ -40,7 +51,7 @@ import { Reveal } from "./src/ui/Reveal";
 import { Round } from "./src/ui/Round";
 import { Waiting } from "./src/ui/Waiting";
 import { Button } from "./src/ui/Button";
-import { colors, s, shortKey } from "./src/ui/styles";
+import { colors, shortKey } from "./src/ui/styles";
 import idl from "./src/idl.json";
 
 const herd = new Herd(idl);
@@ -129,14 +140,19 @@ export default function App() {
   const [vote, setVote] = useState<Ending>(Ending.Split);
   /** The room a join code pointed at, read before anyone commits a stake to it. */
   const [preview, setPreview] = useState<RoomState | null>(null);
-  const [pending, setPending] = useState<{ host: PublicKey; roomId: bigint } | null>(null);
+  const [pending, setPending] = useState<{
+    host: PublicKey;
+    roomId: bigint;
+  } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [ref, setRef] = useState<RoomRef | null>(null);
   const [session, setSession] = useState<Keypair | null>(null);
   const [room, setRoom] = useState<RoomState | null>(null);
-  const [endpoint, setEndpoint] = useState<{ url: string; token?: string }>({ url: BASE_RPC });
+  const [endpoint, setEndpoint] = useState<{ url: string; token?: string }>({
+    url: BASE_RPC,
+  });
   const [pot, setPot] = useState(0);
 
   const [bots, setBots] = useState<Bot[]>([]);
@@ -246,14 +262,16 @@ export default function App() {
     }
 
     if (screen === "reveal") return;
-    if (room.phase === Phase.Finished || room.phase === Phase.Settled) setScreen("finished");
+    if (room.phase === Phase.Finished || room.phase === Phase.Settled)
+      setScreen("finished");
     else setScreen("playing");
   }, [room]);
 
   // Close the round when the clock runs out. Anyone may do it, so the app does
   // rather than waiting for someone else to notice.
   useEffect(() => {
-    if (!room || !wallet || room.phase !== Phase.Playing || room.awaitingCoin) return;
+    if (!room || !wallet || room.phase !== Phase.Playing || room.awaitingCoin)
+      return;
     const left = Number(room.roundEndsAt) - Math.floor(Date.now() / 1000);
     if (left > 0 || closing.current || !session) return;
 
@@ -263,7 +281,14 @@ export default function App() {
         await sendLocal(
           endpoint.url,
           [session],
-          [herd.closeRound(ref!.host, ref!.roomId, session.publicKey, room.round)],
+          [
+            herd.closeRound(
+              ref!.host,
+              ref!.roomId,
+              session.publicKey,
+              room.round,
+            ),
+          ],
           endpoint.token,
         );
       } catch (e) {
@@ -280,38 +305,44 @@ export default function App() {
   // Bots answer on their own, once per round, spread across the window so the
   // room fills up the way it would with people in it.
   useEffect(() => {
-    if (!room || !ref || room.phase !== Phase.Playing || room.awaitingCoin) return;
+    if (!room || !ref || room.phase !== Phase.Playing || room.awaitingCoin)
+      return;
     if (bots.length === 0 || botted.current === room.round) return;
     botted.current = room.round;
 
     const question = questionFor(room.round);
     const live = bots.filter((bot) =>
       room.seats.some(
-        (seat) => seat.alive && seat.session.toBase58() === bot.keypair.publicKey.toBase58(),
+        (seat) =>
+          seat.alive &&
+          seat.session.toBase58() === bot.keypair.publicKey.toBase58(),
       ),
     );
 
     live.forEach((bot) => {
-      setTimeout(async () => {
-        try {
-          await sendLocal(
-            endpoint.url,
-            [bot.keypair],
-            [
-              herd.submitAnswer(
-                ref.host,
-                ref.roomId,
-                bot.keypair.publicKey,
-                botAnswer(question, bot.persona),
-              ),
-            ],
-            endpoint.token,
-          );
-        } catch {
-          // A bot that misses the window is culled for it, exactly like a person
-          // who did not answer. Nothing to recover.
-        }
-      }, botDelay(room.roundSeconds, bot.persona));
+      setTimeout(
+        async () => {
+          try {
+            await sendLocal(
+              endpoint.url,
+              [bot.keypair],
+              [
+                herd.submitAnswer(
+                  ref.host,
+                  ref.roomId,
+                  bot.keypair.publicKey,
+                  botAnswer(question, bot.persona),
+                ),
+              ],
+              endpoint.token,
+            );
+          } catch {
+            // A bot that misses the window is culled for it, exactly like a person
+            // who did not answer. Nothing to recover.
+          }
+        },
+        botDelay(room.roundSeconds, bot.persona),
+      );
     });
   }, [room, bots, endpoint, ref]);
 
@@ -458,7 +489,8 @@ export default function App() {
       if (!data) throw new Error("No room with that code.");
 
       const found = herd.decodeRoom(data);
-      if (found.phase !== Phase.Open) throw new Error("That room has already started.");
+      if (found.phase !== Phase.Open)
+        throw new Error("That room has already started.");
 
       setPreview(found);
       setPending({ host, roomId });
@@ -474,7 +506,13 @@ export default function App() {
       const mine = await sessionFor(key.toBase58());
       setSession(mine);
       await sendAsWallet([
-        herd.joinRoom(host, roomId, new PublicKey(wallet!.address), mine.publicKey, vote),
+        herd.joinRoom(
+          host,
+          roomId,
+          new PublicKey(wallet!.address),
+          mine.publicKey,
+          vote,
+        ),
         SystemProgram.transfer({
           fromPubkey: new PublicKey(wallet!.address),
           toPubkey: mine.publicKey,
@@ -513,7 +551,15 @@ export default function App() {
         await sendLocal(
           BASE_RPC,
           [bot.keypair],
-          [herd.joinRoom(host, roomId, bot.keypair.publicKey, bot.keypair.publicKey, vote)],
+          [
+            herd.joinRoom(
+              host,
+              roomId,
+              bot.keypair.publicKey,
+              bot.keypair.publicKey,
+              vote,
+            ),
+          ],
         );
         await sleep(600);
       }
@@ -532,7 +578,11 @@ export default function App() {
   const onStart = () =>
     run("Locking the room", async () => {
       const { host, roomId } = ref!;
-      await sendLocal(BASE_RPC, [session!], [herd.lockRoom(host, roomId, session!.publicKey)]);
+      await sendLocal(
+        BASE_RPC,
+        [session!],
+        [herd.lockRoom(host, roomId, session!.publicKey)],
+      );
       await sleep(2500);
 
       setBusy("Handing it to the rollup");
@@ -584,7 +634,9 @@ export default function App() {
   const onLeave = () =>
     run("Leaving", async () => {
       const { host, roomId } = ref!;
-      await sendAsWallet([herd.leaveRoom(host, roomId, new PublicKey(wallet!.address))]);
+      await sendAsWallet([
+        herd.leaveRoom(host, roomId, new PublicKey(wallet!.address)),
+      ]);
       onAgain();
     });
 
@@ -622,7 +674,9 @@ export default function App() {
 
   /* ---------------------------------------------------------------- view */
 
-  const mySeat = room?.seats.find((x) => x.session.toBase58() === session?.publicKey.toBase58());
+  const mySeat = room?.seats.find(
+    (x) => x.session.toBase58() === session?.publicKey.toBase58(),
+  );
 
   // Bots that exist and are funded but have not taken a seat yet. Counting the
   // ones that exist would hide the button the moment a room is opened, since
@@ -636,47 +690,59 @@ export default function App() {
 
   return (
     <KeyboardAvoidingView
-      style={s.root}
+      className="flex-1 bg-bg"
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <StatusBar barStyle="light-content" backgroundColor={colors.bg} />
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerClassName="p-[18px] pt-[54px] pb-10 grow"
+        keyboardShouldPersistTaps="handled"
+      >
         {screen !== "connect" && screen !== "lobby" && (
-          <View style={[s.brand, { marginBottom: 18 }]}>
+          <View className="items-center mb-[18px]">
             <Wordmark small />
           </View>
         )}
 
         {error && (
-          <View style={[s.card, s.cardBad, { marginBottom: 14 }]}>
-            <Text style={s.errTitle}>Didn't work</Text>
-            <Text style={s.err}>{error}</Text>
+          <View className="bg-bad-dim border border-bad-line rounded-card p-4 gap-3 mb-3.5">
+            <Text className="text-bad-ink text-sm font-extrabold">Didn't work</Text>
+            <Text className="text-bad-ink text-[13px] leading-[19px]">{error}</Text>
           </View>
         )}
 
         {busy && (
-          <View style={[s.card, { marginBottom: 14, flexDirection: "row", alignItems: "center", gap: 12 }]}>
+          <View className="bg-surface border border-line rounded-card p-4 mb-3.5 flex-row items-center gap-3">
             <ActivityIndicator color={colors.lime} />
-            <Text style={s.body}>{busy}…</Text>
+            <Text className="text-muted text-body">{busy}…</Text>
           </View>
         )}
 
         {restoring && screen === "connect" && (
-          <View style={s.card}>
-            <Text style={s.note}>Looking for your wallet…</Text>
+          <View className="bg-surface border border-line rounded-card p-4 gap-3">
+            <Text className="text-faint text-note">Looking for your wallet…</Text>
           </View>
         )}
 
         {!restoring && screen === "connect" && (
           <>
-            <View style={s.brand}>
+            <View className="items-center mb-1.5">
               <Wordmark />
-              <Text style={s.tagline}>Think alike. Stay alive.</Text>
-              <Text style={s.flock}>🐑🐑🐑🐑</Text>
+              <Text className="text-ink text-[15px] font-semibold -tracking-[0.2px] mt-0.5">Think alike. Stay alive.</Text>
+              {/* An Image needs a size of its own - it has no text to grow around. */}
+              <Image
+                source={require("./assets/landing/herds.png")}
+                className="w-[240px] h-[96px] mt-2.5 mb-1"
+                resizeMode="contain"
+              />
             </View>
             <View style={{ gap: 12, marginTop: 18 }}>
-              <Button label="Connect wallet  →" onPress={onConnect} disabled={!!busy} />
-              <Text style={[s.note, { textAlign: "center" }]}>
+              <Button
+                label="Connect wallet  →"
+                onPress={onConnect}
+                disabled={!!busy}
+              />
+              <Text className="text-faint text-note text-center">
                 Everyone answers the same question. The odd one out goes.
               </Text>
             </View>
@@ -686,10 +752,15 @@ export default function App() {
 
         {screen === "lobby" && (
           <>
-            <View style={s.brand}>
+            <View className="items-center mb-1.5">
               <Wordmark />
-              <Text style={s.tagline}>Think alike. Stay alive.</Text>
-              <Text style={s.flock}>🐑🐑🐑🐑</Text>
+              <Text className="text-ink text-[15px] font-semibold -tracking-[0.2px] mt-0.5">Think alike. Stay alive.</Text>
+              {/* An Image needs a size of its own - it has no text to grow around. */}
+              <Image
+                source={require("./assets/landing/herds.png")}
+                className="w-[240px] h-[96px] mt-2.5 mb-1"
+                resizeMode="contain"
+              />
             </View>
 
             <View style={{ gap: 12, marginTop: 14 }}>
@@ -702,23 +773,25 @@ export default function App() {
                 disabled={!!busy}
               />
 
-              <View style={s.split}>
-                <View style={s.splitCell}>
-                  <Text style={s.splitLabel}>Entry fee</Text>
-                  <Text style={s.splitValue}>{(Number(STAKE) / 1e9).toFixed(2)} ◎</Text>
+              <View className="flex-row bg-surface border border-line rounded-2xl overflow-hidden">
+                <View className="flex-1 p-3.5 gap-[3px]">
+                  <Text className="text-faint text-[11px] font-semibold">Entry fee</Text>
+                  <Text className="text-ink text-[19px] font-extrabold -tracking-[0.5px]">
+                    {(Number(STAKE) / 1e9).toFixed(2)} ◎
+                  </Text>
                 </View>
-                <View style={[s.splitCell, s.splitDivide]}>
-                  <Text style={s.splitLabel}>Est. pot</Text>
-                  <Text style={s.splitValue}>
+                <View className="flex-1 p-3.5 gap-[3px] border-l border-line">
+                  <Text className="text-faint text-[11px] font-semibold">Est. pot</Text>
+                  <Text className="text-ink text-[19px] font-extrabold -tracking-[0.5px]">
                     ~{((Number(STAKE) * (BOT_SEATS + 1)) / 1e9).toFixed(2)} ◎
                   </Text>
                 </View>
               </View>
 
-              <View style={s.card}>
-                <Text style={s.section}>GOT A CODE?</Text>
+              <View className="bg-surface border border-line rounded-card p-4 gap-3">
+                <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">GOT A CODE?</Text>
                 <TextInput
-                  style={s.input}
+                  className="bg-surface2 border border-line rounded-field px-4 py-3.5 text-ink text-[15px]"
                   placeholder="paste a room code"
                   placeholderTextColor={colors.faint}
                   autoCapitalize="none"
@@ -737,11 +810,11 @@ export default function App() {
 
             <GuardBar onPress={() => setFairness(true)} />
 
-            <View style={s.walletRow}>
-              <Text style={s.note}>
+            <View className="flex-row items-center mt-5 pt-3.5 border-t border-line">
+              <Text className="text-faint text-note">
                 {wallet ? `${shortKey(wallet.address)} · ${wallet.label}` : ""}
               </Text>
-              <Text style={s.disconnect} onPress={onDisconnect}>
+              <Text className="text-faint text-[12.5px] font-bold ml-auto" onPress={onDisconnect}>
                 Disconnect
               </Text>
             </View>
@@ -750,11 +823,11 @@ export default function App() {
 
         {screen === "opening" && (
           <>
-            <Text style={s.section}>YOUR ROOM</Text>
-            <View style={s.card}>
-              <Text style={s.body}>
-                Twelve seats, 0.01 SOL each. You can seat bots once it is open, so you do not need
-                to find eleven people first.
+            <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">YOUR ROOM</Text>
+            <View className="bg-surface border border-line rounded-card p-4 gap-3">
+              <Text className="text-muted text-body">
+                Twelve seats, 0.01 SOL each. You can seat bots once it is open,
+                so you do not need to find eleven people first.
               </Text>
             </View>
 
@@ -762,27 +835,37 @@ export default function App() {
 
             <View style={{ gap: 10 }}>
               <Button label="Open it" onPress={onCreate} disabled={!!busy} />
-              <Button ghost label="Back" onPress={() => setScreen("lobby")} disabled={!!busy} />
+              <Button
+                ghost
+                label="Back"
+                onPress={() => setScreen("lobby")}
+                disabled={!!busy}
+              />
             </View>
           </>
         )}
 
         {screen === "joining" && preview && (
           <>
-            <Text style={s.section}>THIS ROOM</Text>
-            <View style={s.card}>
-              <View style={s.roundBar}>
-                <Text style={s.chip}>{preview.seats.length} seated</Text>
-                <Text style={s.pot}>
-                  {((Number(preview.stake) * preview.seats.length) / 1e9).toFixed(3)} SOL
+            <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">THIS ROOM</Text>
+            <View className="bg-surface border border-line rounded-card p-4 gap-3">
+              <View className="flex-row items-center gap-2.5 mb-3.5">
+                <Text className="text-muted text-note font-bold bg-surface border border-line rounded-full px-3 py-1 overflow-hidden">{preview.seats.length} seated</Text>
+                <Text className="text-lime text-[13px] font-extrabold ml-auto">
+                  {(
+                    (Number(preview.stake) * preview.seats.length) /
+                    1e9
+                  ).toFixed(3)}{" "}
+                  SOL
                 </Text>
               </View>
-              <Text style={s.body}>
-                Taking a seat stakes {(Number(preview.stake) / 1e9).toFixed(3)} SOL.
+              <Text className="text-muted text-body">
+                Taking a seat stakes {(Number(preview.stake) / 1e9).toFixed(3)}{" "}
+                SOL.
               </Text>
             </View>
 
-            <Text style={s.section}>WHO IS IN</Text>
+            <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase mb-2">WHO IS IN</Text>
             <Seats room={preview} />
 
             <View style={{ marginTop: 14 }}>
@@ -792,8 +875,17 @@ export default function App() {
             <EndingPick value={vote} onChange={setVote} disabled={!!busy} />
 
             <View style={{ gap: 10 }}>
-              <Button label="Take the seat" onPress={onJoin} disabled={!!busy} />
-              <Button ghost label="Back" onPress={() => setScreen("lobby")} disabled={!!busy} />
+              <Button
+                label="Take the seat"
+                onPress={onJoin}
+                disabled={!!busy}
+              />
+              <Button
+                ghost
+                label="Back"
+                onPress={() => setScreen("lobby")}
+                disabled={!!busy}
+              />
             </View>
           </>
         )}
@@ -823,7 +915,11 @@ export default function App() {
             you={wallet?.address}
             pot={pot}
             answer={answer}
-            sealed={sealedWord && mySeat && answered(mySeat, room.round) ? sealedWord : null}
+            sealed={
+              sealedWord && mySeat && answered(mySeat, room.round)
+                ? sealedWord
+                : null
+            }
             alive={!!mySeat?.alive}
             busy={!!busy}
             onChange={setAnswer}

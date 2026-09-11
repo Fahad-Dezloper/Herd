@@ -6,7 +6,7 @@ import { Pressable, Text, TextInput, View } from "react-native";
 import type { RoomState } from "../lib/herd";
 import { Avatar, Pips } from "./Bits";
 import { Seats } from "./Seats";
-import { colors, s } from "./styles";
+import { colors } from "./styles";
 import { Button } from "./Button";
 
 export function Round({
@@ -55,67 +55,87 @@ export function Round({
 
   return (
     <>
-      <View style={s.roundBar}>
-        <Text style={s.chip}>Round {room.round}</Text>
+      <View className="flex-row items-center gap-2.5 mb-3.5">
+        <Text className="text-muted text-note font-bold bg-surface border border-line rounded-full px-3 py-1 overflow-hidden">
+          Round {room.round}
+        </Text>
         <Pips round={room.round} total={12} />
-        <Text style={s.pot}>{(pot / 1e9).toFixed(2)} ◎</Text>
+        <Text className="text-lime text-[13px] font-extrabold ml-auto">
+          {(pot / 1e9).toFixed(2)} ◎
+        </Text>
       </View>
 
-      <View style={[s.clock, low && s.clockLow]}>
-        <Text style={{ fontSize: 15 }}>⏱</Text>
-        <Text style={[s.clockText, low && s.clockTextLow]}>{clock}</Text>
+      {/* The clock is a pill, not a bar - it reads from across a room. */}
+      <View
+        className={`self-center flex-row items-center gap-2 bg-surface rounded-full px-[18px] py-2.5 mb-4 border-[1.5px] ${
+          low ? "border-bad-line" : "border-lime-dim"
+        }`}
+      >
+        <Text className="text-[15px]">⏱</Text>
+        <Text
+          className={`text-[21px] font-extrabold tracking-wide tabular-nums ${
+            low ? "text-bad" : "text-lime"
+          }`}
+        >
+          {clock}
+        </Text>
       </View>
 
       {/* The question is the one piece of paper in a dark room. */}
-      <View style={s.paperCard}>
-        <Text style={s.question}>{question}</Text>
+      <View className="bg-paper rounded-paper py-[30px] px-6 mb-4 rotate-[-0.6deg]">
+        <Text className="text-paper-ink text-[27px] leading-[33px] font-extrabold -tracking-[0.6px] text-center">
+          {question}
+        </Text>
       </View>
 
       {!alive ? (
-        <View style={{ gap: 11 }}>
-          <View style={[s.card, s.cardBad]}>
-            <Text style={s.errTitle}>You're out</Text>
-            <Text style={s.err}>
+        <View className="gap-3">
+          <View className="bg-bad-dim border border-bad-line rounded-card p-4 gap-2">
+            <Text className="text-bad-ink text-sm font-extrabold">You're out</Text>
+            <Text className="text-bad-ink text-[13px] leading-[19px]">
               Watching the rest play for the pot. Your stake is already in it.
             </Text>
           </View>
-          {/* Being out is not a reason to be stuck. Nothing here is waiting on
-              you - the survivors finish the game and the winner collects it. */}
+          {/* Being out is not a reason to be stuck. Nothing here waits on you. */}
           <Button ghost label="Leave and start another" onPress={onLeave} disabled={busy} />
         </View>
       ) : sealed ? (
-        <View style={[s.card, s.cardGood, s.sealed]}>
-          <Text style={s.sealedWord}>{sealed}</Text>
-          <Text style={s.note}>Locked in. Nobody can read it — not even the host.</Text>
+        <View className="bg-[#1b2411] border border-lime-dim rounded-card p-4 items-center gap-2">
+          <Text className="text-lime text-[26px] font-extrabold">{sealed}</Text>
+          <Text className="text-faint text-note text-center">
+            Locked in. Nobody can read it — not even the host.
+          </Text>
         </View>
       ) : room.awaitingCoin || left <= 0 ? (
-        <View style={s.card}>
-          <Text style={s.body}>
+        <View className="bg-surface border border-line rounded-card p-4">
+          <Text className="text-muted text-body">
             {room.awaitingCoin
               ? "Two of you left. Flipping for it…"
               : "Time's up. Scoring the round…"}
           </Text>
         </View>
       ) : (
-        <View style={{ gap: 11 }}>
+        <View className="gap-3">
           {options.length > 0 && (
-            <View style={s.optRow}>
+            <View className="flex-row flex-wrap gap-2">
               {options.map((word) => {
                 const picked = answer.trim().toLowerCase() === word;
                 return (
                   <Pressable
                     key={word}
-                    style={({ pressed }) => [
-                      s.opt,
-                      picked && s.optOn,
-                      pressed && s.btnPressed,
-                    ]}
+                    className={`rounded-full px-4 py-2.5 border active:opacity-80 ${
+                      picked ? "border-lime bg-lime-dim" : "border-line bg-surface"
+                    }`}
                     onPress={() => onChange(picked ? "" : word)}
                     disabled={busy}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: picked }}
                   >
-                    <Text style={[s.optText, picked && s.optTextOn]}>{word}</Text>
+                    <Text
+                      className={`text-[15px] font-semibold ${picked ? "text-lime" : "text-ink"}`}
+                    >
+                      {word}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -123,7 +143,7 @@ export function Round({
           )}
 
           <TextInput
-            style={[s.input, s.inputBig]}
+            className="bg-surface2 border border-line rounded-field px-4 py-3.5 text-ink text-xl font-bold"
             placeholder="or type your own"
             placeholderTextColor={colors.faint}
             autoCapitalize="none"
@@ -135,48 +155,34 @@ export function Round({
             returnKeyType="done"
           />
           <Button label="LOCK IN  →" onPress={onSubmit} disabled={busy || !answer.trim()} />
-          <Text style={[s.note, { textAlign: "center" }]}>
+          <Text className="text-faint text-note text-center">
             Once you lock in, you can't change it.
           </Text>
         </View>
       )}
 
-      {/* Who is at the table, and who has already gone. */}
-      <View style={{ marginTop: 20, gap: 10 }}>
-        <Text style={s.section}>THE ROOM</Text>
-        <PlayerRow room={room} you={you} nameOf={nameOf} />
+      <View className="mt-5 gap-2.5">
+        <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase">
+          The room
+        </Text>
+        <View className="flex-row flex-wrap gap-3">
+          {room.seats.map((seat) => {
+            const key = seat.wallet.toBase58();
+            return (
+              <Avatar
+                key={key}
+                who={key}
+                name={key === you ? "you" : nameOf?.(key)}
+                size={42}
+                out={!seat.alive}
+                you={key === you}
+                showName
+              />
+            );
+          })}
+        </View>
         <Seats room={room} you={you} nameOf={nameOf} />
       </View>
     </>
-  );
-}
-
-/** Faces in a row, the way the reference shows a table at a glance. */
-function PlayerRow({
-  room,
-  you,
-  nameOf,
-}: {
-  room: RoomState;
-  you?: string;
-  nameOf?: (key: string) => string;
-}) {
-  return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-      {room.seats.map((seat) => {
-        const key = seat.wallet.toBase58();
-        return (
-          <Avatar
-            key={key}
-            who={key}
-            name={key === you ? "you" : nameOf?.(key)}
-            size={42}
-            out={!seat.alive}
-            you={key === you}
-            showName
-          />
-        );
-      })}
-    </View>
   );
 }

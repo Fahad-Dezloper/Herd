@@ -5,7 +5,6 @@ import { Text, View } from "react-native";
 import type { RoomState } from "../lib/herd";
 import { Ring } from "./Bits";
 import { EndingTally } from "./EndingPick";
-import { s } from "./styles";
 import { Button } from "./Button";
 
 export function Waiting({
@@ -43,46 +42,56 @@ export function Waiting({
 
   return (
     <>
-      <Text style={[s.h1, { textAlign: "center" }]}>Finding your herd…</Text>
-      <Text style={[s.note, { textAlign: "center", marginTop: 4, marginBottom: 20 }]}>
+      <Text className="text-ink text-[25px] font-extrabold -tracking-[0.6px] text-center">
+        Finding your herd…
+      </Text>
+      <Text className="text-faint text-note text-center mt-1 mb-5">
         {enough ? "Ready when you are." : "A game needs three people."}
       </Text>
 
       {/* A room of people, drawn as a room of people. A list of rows is a
           spreadsheet; this is a table you are sitting at. */}
       <Ring seats={seats} you={you} nameOf={nameOf}>
-        <Text style={s.ringCount}>{room.seats.length}</Text>
-        <Text style={s.ringLabel}>
+        <Text className="text-ink text-[32px] font-black -tracking-[1px]">
+          {room.seats.length}
+        </Text>
+        <Text className="text-muted text-xs font-semibold">
           {room.seats.length === 1 ? "player joined" : "players joined"}
         </Text>
       </Ring>
 
-      <View style={[s.split, { marginTop: 24 }]}>
-        <View style={s.splitCell}>
-          <Text style={s.splitLabel}>Entry fee</Text>
-          <Text style={s.splitValue}>{(Number(room.stake) / 1e9).toFixed(2)} ◎</Text>
+      <View className="flex-row bg-surface border border-line rounded-2xl overflow-hidden mt-6">
+        <View className="flex-1 p-3.5 gap-[3px]">
+          <Text className="text-faint text-[11px] font-semibold">Entry fee</Text>
+          <Text className="text-ink text-[19px] font-extrabold -tracking-[0.5px]">
+            {(Number(room.stake) / 1e9).toFixed(2)} ◎
+          </Text>
         </View>
-        <View style={[s.splitCell, s.splitDivide]}>
-          <Text style={s.splitLabel}>Current pot</Text>
-          <Text style={s.splitValue}>{(pot / 1e9).toFixed(2)} ◎</Text>
+        <View className="flex-1 p-3.5 gap-[3px] border-l border-line">
+          <Text className="text-faint text-[11px] font-semibold">Current pot</Text>
+          <Text className="text-ink text-[19px] font-extrabold -tracking-[0.5px]">
+            {(pot / 1e9).toFixed(2)} ◎
+          </Text>
         </View>
       </View>
 
-      <View style={{ marginTop: 16, gap: 9 }}>
-        <Text style={s.section}>SHARE THIS TO FILL THE ROOM</Text>
-        <View style={s.card}>
-          <Text style={s.mono} selectable>
+      <View className="mt-4 gap-2">
+        <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase">
+          Share this to fill the room
+        </Text>
+        <View className="bg-surface border border-line rounded-card p-4">
+          <Text className="text-ink font-mono text-[11.5px]" selectable>
             {code}
           </Text>
         </View>
       </View>
 
-      <View style={{ marginTop: 14 }}>
+      <View className="mt-3.5">
         <EndingTally room={room} />
       </View>
 
       {isHost ? (
-        <View style={{ marginTop: 16, gap: 10 }}>
+        <View className="mt-4 gap-2.5">
           {unseatedBots > 0 && (
             <Button
               ghost
@@ -93,20 +102,20 @@ export function Waiting({
           )}
           <Button label="START  →" onPress={onStart} disabled={busy || !enough} />
           {!enough && (
-            <Text style={[s.note, { textAlign: "center" }]}>
+            <Text className="text-faint text-note text-center">
               Three is the smallest game there is.
             </Text>
           )}
         </View>
       ) : (
-        <Text style={[s.note, { marginTop: 18, textAlign: "center" }]}>
+        <Text className="text-faint text-note text-center mt-4">
           Waiting for the host to start.
         </Text>
       )}
 
       {/* Nothing has happened yet, so nothing is owed - the stake comes back
           whole. Once the room locks this goes away. */}
-      <View style={{ marginTop: 12 }}>
+      <View className="mt-3">
         <Button ghost label="Leave and take my stake back" onPress={onLeave} disabled={busy} />
       </View>
     </>

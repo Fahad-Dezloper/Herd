@@ -2,17 +2,16 @@
  * The end of a game.
  *
  * A result screen that only announces the result is a dead end - you are told
- * you lost, and the room you spent ten minutes in disappears. So this shows the
- * things you would want to know at the table: what the pot was and who has it,
- * what everyone said with their last word, how far you got, and how to start
- * another one.
+ * you lost, and the room you spent ten minutes in disappears. So this shows
+ * what you would want to know at the table: what the pot was and who has it,
+ * what everyone said with their last word, and how to start another one.
  */
 
 import { Text, View } from "react-native";
 
-import { Ending, type RoomState } from "../lib/herd";
-import { s, shortKey, tint } from "./styles";
+import type { RoomState } from "../lib/herd";
 import { Avatar } from "./Bits";
+import { shortKey } from "./styles";
 import { Button } from "./Button";
 
 export function Finished({
@@ -38,44 +37,56 @@ export function Finished({
 }) {
   const survivors = room.seats.filter((seat) => seat.alive);
   const share = survivors.length ? pot / survivors.length : 0;
+  // Losing the final two to a coin is a different feeling from being
+  // out-guessed, and the screen should not make you wonder which happened.
   const coin = room.coinDecided;
+  const champion = survivors[0];
+  const championName = champion
+    ? champion.wallet.toBase58() === you
+      ? "you"
+      : (nameOf?.(champion.wallet.toBase58()) ?? shortKey(champion.wallet.toBase58()))
+    : "";
 
   return (
     <>
-      {/* The moment, given the room a result deserves. */}
-      <View style={[s.card, youWon ? s.cardGood : s.cardBad, { alignItems: "center", gap: 10 }]}>
-        <Text style={s.crown}>{youWon ? "👑" : "🐑"}</Text>
-        <Text style={youWon ? s.champion : s.big}>
+      <View
+        className={`rounded-card p-4 items-center gap-2.5 border ${
+          youWon ? "bg-[#1b2411] border-lime-dim" : "bg-bad-dim border-bad-line"
+        }`}
+      >
+        <Text className="text-[40px]">{youWon ? "👑" : "🐑"}</Text>
+        <Text
+          className={
+            youWon
+              ? "text-lime text-3xl font-black italic -tracking-[1px] text-center"
+              : "text-ink text-2xl font-extrabold -tracking-[0.5px] text-center"
+          }
+        >
           {youWon
             ? survivors.length === 1
               ? "HERD CHAMPION"
               : "YOU MADE IT"
             : coin
-              ? "The coin didn't"
+              ? "The coin didn't fall your way"
               : "The herd moved on"}
         </Text>
-        {survivors[0] && (
+
+        {champion && (
           <Avatar
-            who={survivors[0].wallet.toBase58()}
-            name={
-              survivors[0].wallet.toBase58() === you
-                ? "you"
-                : nameOf?.(survivors[0].wallet.toBase58())
-            }
+            who={champion.wallet.toBase58()}
+            name={championName}
             size={76}
-            you={survivors[0].wallet.toBase58() === you}
+            you={champion.wallet.toBase58() === you}
           />
         )}
-        <View style={s.ribbon}>
-          <Text style={s.ribbonText}>
-            {survivors.length === 1
-              ? youWon
-                ? "you"
-                : (nameOf?.(survivors[0].wallet.toBase58()) ?? "winner")
-              : `${survivors.length} survivors`}
+
+        <View className="bg-lime rounded-full px-6 py-2">
+          <Text className="text-lime-ink text-[17px] font-extrabold">
+            {survivors.length === 1 ? championName : `${survivors.length} survivors`}
           </Text>
         </View>
-        <Text style={s.body}>
+
+        <Text className="text-muted text-body text-center">
           {coin
             ? `Down to two after ${room.round} rounds, and the table had voted to flip.`
             : survivors.length === 1
@@ -84,81 +95,44 @@ export function Finished({
         </Text>
       </View>
 
-      {/* The money, and where it went. The thing everybody scrolls to. */}
-      <View style={[s.card, s.cardGold, { marginTop: 14, alignItems: "center" }]}>
-        <Text style={s.section}>{settled ? "PAID OUT" : "THE POT"}</Text>
-        <Text style={s.potBig}>◎ {(pot / 1e9).toFixed(2)}</Text>
-        <Text style={s.body}>
+      {/* The money, and where it went. The thing everybody looks for. */}
+      <View className="bg-[#1b2411] border border-lime-dim rounded-card p-4 mt-3.5 items-center gap-1.5">
+        <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase">
+          {settled ? "Paid out" : "The pot"}
+        </Text>
+        <Text className="text-ink text-[40px] font-black -tracking-[1.5px]">
+          ◎ {(pot / 1e9).toFixed(2)}
+        </Text>
+        <Text className="text-muted text-body text-center">
           {survivors.length === 1
             ? youWon
               ? "All of it is yours."
-              : `All of it went to ${nameOf?.(survivors[0].wallet.toBase58()) ?? shortKey(survivors[0].wallet.toBase58())}.`
-            : `Split ${survivors.length} ways — ${(share / 1e9).toFixed(3)} SOL each.`}
+              : `All of it went to ${championName}.`
+            : `Split ${survivors.length} ways — ◎ ${(share / 1e9).toFixed(2)} each.`}
         </Text>
-        <Text style={s.note}>
+        <Text className="text-faint text-note text-center">
           {settled
-            ? "Paid out on Solana. The rollup ran the game and never held the money."
+            ? "Paid on Solana. The rollup ran the game and never held the money."
             : "Waiting to be paid out on Solana."}
         </Text>
       </View>
 
-      {/* Why it ended the way it did. Without this, losing the last two to a
-          coin looks like the game simply stopped working. */}
-      {coin && (
-        <View style={[s.card, { marginTop: 14 }]}>
-          <Text style={s.note}>HOW IT ENDED</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 }}>
-            {survivors.map((seat) => {
-              const key = seat.wallet.toBase58();
-              const isYou = key === you;
-              return (
-                <Avatar
-                  key={key}
-                  who={key}
-                  name={isYou ? "you" : (nameOf?.(key) ?? shortKey(key))}
-                  size={34}
-                  you={isYou}
-                />
-              );
-            })}
-            <Text style={s.seatName}>
-              the coin chose{" "}
-              {youWon ? "you" : (nameOf?.(survivors[0]?.wallet.toBase58() ?? "") ?? "")}
-            </Text>
-          </View>
-          <Text style={s.note}>
-            No round can separate two players — same word is one group, different words are two
-            groups of one, and either way nobody strays. This table voted to flip for it instead of
-            sharing.
-          </Text>
-        </View>
+      {!settled && youWon && (
+        <Text className="text-faint text-note mt-3.5">
+          Your session key sends it, so there is no fingerprint and nothing to approve. Nobody else
+          has to be here, and the pot keeps until you claim it.
+        </Text>
+      )}
+      {!settled && !youWon && (
+        <Text className="text-faint text-note mt-3.5">
+          Nothing for you to do here — claiming is the winner's, and the vault holds the pot on
+          Solana until they do.
+        </Text>
       )}
 
       <LastWords room={room} you={you} nameOf={nameOf} />
 
-      {!settled && youWon && (
-        <View style={[s.card, { marginTop: 14 }]}>
-          <Text style={s.note}>STILL TO DO</Text>
-          <Text style={s.body}>
-            The pot is sitting in the room's vault on Solana. One transaction hands the room back
-            from the rollup and pays it out. The program works out who won from its own seats rather
-            than being told, so it cannot pay anybody else.
-          </Text>
-          <Text style={s.note}>
-            Your session key sends it, so there is no fingerprint and nothing to approve. Nobody
-            else has to be here for it, and the pot keeps until you do.
-          </Text>
-        </View>
-      )}
-
-      {!settled && !youWon && (
-        <Text style={[s.note, { marginTop: 14 }]}>
-          Nothing for you to do here — collecting is the winner's to make, and the vault holds the
-          pot on Solana until they do.
-        </Text>
-      )}
-
-      <View style={{ marginTop: 18, gap: 10 }}>
+      <View className="mt-5 gap-2.5">
         {!settled && youWon && (
           <Button
             label={`CLAIM ◎ ${(share / 1e9).toFixed(2)}`}
@@ -181,8 +155,8 @@ export function Finished({
  * The last thing everyone said.
  *
  * The final round is the one people argue about afterwards, and it is already
- * on chain - the program publishes each round's words once scoring them can no
- * longer be influenced by reading them.
+ * on chain - the program publishes each round's words once reading them can no
+ * longer change the scoring.
  */
 function LastWords({
   room,
@@ -200,22 +174,33 @@ function LastWords({
   if (!said.length) return null;
 
   return (
-    <>
-      <Text style={s.section}>THE LAST WORD</Text>
-      <View style={{ gap: 8 }}>
+    <View className="mt-5 gap-2.5">
+      <Text className="text-faint text-micro font-extrabold tracking-[1.4px] uppercase">
+        The last word
+      </Text>
+      <View className="gap-2">
         {said.map(({ seat, word }) => {
           const key = seat.wallet.toBase58();
           const isYou = key === you;
           const name = isYou ? "you" : (nameOf?.(key) ?? shortKey(key));
           return (
-            <View key={key} style={[s.seatRow, !seat.alive && s.seatOut]}>
+            <View
+              key={key}
+              className={`flex-row items-center gap-3 py-2 px-3 bg-surface border border-line rounded-field ${
+                !seat.alive ? "opacity-40" : ""
+              }`}
+            >
               <Avatar who={key} name={name} size={30} out={!seat.alive} you={isYou} />
-              <Text style={s.seatName}>{name}</Text>
-              <Text style={[s.lastWord, !seat.alive && s.seatStatusOut]}>{word}</Text>
+              <Text className="flex-1 text-ink text-sm font-semibold">{name}</Text>
+              <Text
+                className={`text-sm font-bold ml-auto ${!seat.alive ? "text-bad" : "text-ink"}`}
+              >
+                {word}
+              </Text>
             </View>
           );
         })}
       </View>
-    </>
+    </View>
   );
 }

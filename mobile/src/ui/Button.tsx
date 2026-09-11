@@ -1,15 +1,11 @@
 /**
  * The one button in the app.
  *
- * It lives here rather than in App.tsx because every screen needs it, and
- * importing it from the root made each screen part of a require cycle - React
- * Native permits those but warns that they can leave a value uninitialised,
- * which for a component means rendering nothing with no error.
+ * Two shapes only: lime means "this is the thing to press", and the ghost is
+ * everything else. A third would start a conversation about which is which.
  */
 
 import { Pressable, Text } from "react-native";
-
-import { s } from "./styles";
 
 export function Button({
   label,
@@ -22,17 +18,29 @@ export function Button({
   disabled?: boolean;
   ghost?: boolean;
 }) {
+  const base = "rounded-full items-center justify-center active:opacity-80";
+  const shape = ghost
+    ? "bg-surface2 border border-line py-[15px]"
+    : "bg-lime py-[17px]";
+  // A faded button reads as broken; a disabled one should read as unavailable.
+  const off = disabled ? "bg-surface2 border border-line" : "";
+
   return (
     <Pressable
-      style={({ pressed }) => [
-        ghost ? s.btnGhost : s.btn,
-        pressed && s.btnPressed,
-        disabled && s.btnDisabled,
-      ]}
+      className={`${base} ${shape} ${off}`}
       onPress={onPress}
       disabled={disabled}
+      accessibilityRole="button"
     >
-      <Text style={[ghost ? s.btnGhostText : s.btnText, disabled && s.btnTextDisabled]}>
+      <Text
+        className={
+          disabled
+            ? "text-faint font-bold text-[15px]"
+            : ghost
+              ? "text-ink font-bold text-[14.5px]"
+              : "text-lime-ink font-extrabold text-[16.5px] tracking-wide"
+        }
+      >
         {label}
       </Text>
     </Pressable>
